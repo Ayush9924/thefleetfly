@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { getSocket, initSocket } from '../lib/socket';
 import { useAuth } from './AuthContext';
+import { generateMockLocationUpdates } from '../lib/mockLocationData';
 
 const RealtimeContext = createContext();
 
@@ -31,6 +32,19 @@ export const RealtimeProvider = ({ children }) => {
         setNotifications(prev => [notif, ...prev]);
         setUnreadCount(c => c + 1);
       });
+
+      // Fallback: Generate mock data if no real data (for demo/development)
+      const mockInterval = setInterval(() => {
+        const mockUpdates = generateMockLocationUpdates();
+        mockUpdates.forEach(update => {
+          setLocations(prev => ({ 
+            ...prev, 
+            [update.driverId]: update 
+          }));
+        });
+      }, 3000); // Update every 3 seconds
+
+      return () => clearInterval(mockInterval);
     }
 
     return () => {
@@ -60,6 +74,7 @@ export const RealtimeProvider = ({ children }) => {
       {children}
     </RealtimeContext.Provider>
   );
+};
 };
 
 export const useRealtime = () => useContext(RealtimeContext);
