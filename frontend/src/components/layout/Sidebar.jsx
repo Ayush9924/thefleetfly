@@ -97,7 +97,7 @@ const menuItems = [
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false)
-  const [mounted, setMounted] = useState(false)
+  const [mounted, setMounted] = useState(true)
   const location = useLocation()
   const { currentUser } = useAuth()
 
@@ -119,10 +119,6 @@ export default function Sidebar() {
       setIsCollapsed(saved === 'true')
     }
   }, [])
-
-  if (!mounted) {
-    return null
-  }
 
   return (
     <div
