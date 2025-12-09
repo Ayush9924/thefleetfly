@@ -241,7 +241,7 @@ export default function NotificationsPage() {
             >
               <div className="flex items-start gap-4">
                 {/* Icon */}
-                <div className="flex-shrink-0 mt-1">
+                <div className="shrink-0 mt-1">
                   {getNotificationIcon(notification.type)}
                 </div>
 
@@ -259,7 +259,7 @@ export default function NotificationsPage() {
 
                     {/* Status Badge */}
                     {!notification.read && (
-                      <span className="flex-shrink-0 h-2 w-2 bg-blue-600 rounded-full mt-2"></span>
+                      <span className="shrink-0 h-2 w-2 bg-blue-600 rounded-full mt-2"></span>
                     )}
                   </div>
 
@@ -270,7 +270,7 @@ export default function NotificationsPage() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex-shrink-0 flex gap-2 opacity-0 hover:opacity-100 transition">
+                <div className="shrink-0 flex gap-2 opacity-0 hover:opacity-100 transition">
                   <button
                     onClick={(e) => {
                       e.stopPropagation()

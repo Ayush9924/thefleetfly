@@ -103,7 +103,7 @@ export default function ChatList({ onSelectConversation, selectedId = null }) {
               >
                 <div className="flex items-start gap-3">
                   {/* Avatar */}
-                  <div className="flex-shrink-0 w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                  <div className="shrink-0 w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
                     {getInitials(conversation.participantName)}
                   </div>
 
@@ -113,7 +113,7 @@ export default function ChatList({ onSelectConversation, selectedId = null }) {
                       <p className="font-medium text-gray-900 truncate">
                         {conversation.participantName}
                       </p>
-                      <p className="text-xs text-gray-500 flex-shrink-0">
+                      <p className="text-xs text-gray-500 shrink-0">
                         {formatTime(conversation.lastMessageTime)}
                       </p>
                     </div>
@@ -124,7 +124,7 @@ export default function ChatList({ onSelectConversation, selectedId = null }) {
 
                   {/* Unread Badge */}
                   {conversation.unreadCount > 0 && (
-                    <div className="flex-shrink-0 bg-blue-500 text-white text-xs font-semibold w-5 h-5 rounded-full flex items-center justify-center">
+                    <div className="shrink-0 bg-blue-500 text-white text-xs font-semibold w-5 h-5 rounded-full flex items-center justify-center">
                       {conversation.unreadCount > 9 ? '9+' : conversation.unreadCount}
                     </div>
                   )}
