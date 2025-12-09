@@ -1,0 +1,26 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #f9fafb; /* Tailwind's bg-gray-50 */
+  color: #111827;            /* Tailwind's text-gray-900 */
+}
+
+/* Glassmorphism helper (Tailwind may not process arbitrary values in JIT) */
+.bg-white\/70 {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.backdrop-blur-sm {
+  backdrop-filter: blur(6px);
+}
+
+/* Smooth hover transitions */
+.card-hover {
+  transition: all 0.3s ease;
+}
+.card-hover:hover {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  transform: translateY(-2px);
+}
