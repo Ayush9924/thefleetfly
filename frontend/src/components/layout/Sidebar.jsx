@@ -73,7 +73,7 @@ const menuItems = [
     name: 'Live Tracking',
     icon: Map,
     path: '/dashboard/tracking',
-    roles: ['admin', 'manager']
+    roles: ['admin', 'manager', 'driver', 'mechanic']
   },
   {
     name: 'Messages',
@@ -152,8 +152,8 @@ export default function Sidebar() {
 
       <nav className="flex-1 overflow-y-auto py-4">
         <ul className="space-y-1 px-2">
-          {currentUser && menuItems
-            .filter(item => item.roles.includes(currentUser.role))
+          {menuItems
+            .filter(item => !currentUser || item.roles.includes(currentUser.role))
             .map((item) => {
               const Icon = item.icon
               const isActive = location.pathname === item.path
