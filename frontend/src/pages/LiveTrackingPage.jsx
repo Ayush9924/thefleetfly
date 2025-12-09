@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSocketLocation } from '../hooks/useSocketLocation'
-import { useRealtime } from '../contexts/AuthContext'
+import { useRealtime } from '../contexts/RealtimeContext'
 import LiveMapTracker from '../components/LiveMapTracker'
 import { Card } from '../components/ui/card'
 import { MapPin, Zap, Gauge } from 'lucide-react'
