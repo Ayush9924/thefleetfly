@@ -44,17 +44,16 @@ export const RealtimeProvider = ({ children }) => {
         });
       }, 3000); // Update every 3 seconds
 
-      return () => clearInterval(mockInterval);
+      return () => {
+        clearInterval(mockInterval);
+        if (socket) {
+          socket.off('connect');
+          socket.off('disconnect');
+          socket.off('driver:location_update');
+          socket.off('notification:new');
+        }
+      };
     }
-
-    return () => {
-      if (socket) {
-        socket.off('connect');
-        socket.off('disconnect');
-        socket.off('driver:location_update');
-        socket.off('notification:new');
-      }
-    };
   }, [token]);
 
   // Convert locations object to array
@@ -74,7 +73,6 @@ export const RealtimeProvider = ({ children }) => {
       {children}
     </RealtimeContext.Provider>
   );
-};
 };
 
 export const useRealtime = () => useContext(RealtimeContext);
