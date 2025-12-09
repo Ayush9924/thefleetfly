@@ -125,10 +125,25 @@ export default function LiveMapTracker({
 
   if (error) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-red-50 border border-red-200 rounded-lg">
+      <div className="w-full h-full flex items-center justify-center bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="text-center p-6">
+          <p className="text-blue-600 font-semibold mb-2">Map Unavailable</p>
+          <p className="text-blue-500 text-sm mb-4">{error}</p>
+          <p className="text-blue-500 text-xs">Install with: npm install leaflet</p>
+          <div className="mt-4 p-4 bg-white rounded border border-blue-200">
+            <p className="text-gray-600 text-sm">Showing driver list below instead</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (drivers.length === 0) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-100 rounded-lg">
         <div className="text-center">
-          <p className="text-red-600 font-semibold mb-2">Map Error</p>
-          <p className="text-red-500 text-sm">{error}</p>
+          <p className="text-gray-600 font-semibold">No drivers to display</p>
+          <p className="text-gray-500 text-sm">Drivers will appear here when they share their location</p>
         </div>
       </div>
     )

@@ -43,12 +43,15 @@ export const RealtimeProvider = ({ children }) => {
     };
   }, [token]);
 
+  // Convert locations object to array
+  const locationsArray = Object.values(locations);
+
   return (
     <RealtimeContext.Provider
       value={{
         socket,
         isConnected,
-        locations,
+        locations: locationsArray,
         notifications,
         unreadCount,
         setUnreadCount,

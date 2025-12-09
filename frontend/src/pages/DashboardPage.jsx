@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom'; // ✅ Added Link
 import {
   Card,
   CardContent,
@@ -38,11 +38,12 @@ import {
   LogOut,
   Settings,
   User as UserIcon,
+  MessageSquare, // ✅ Added MessageSquare
 } from 'lucide-react';
 import { format, subDays, startOfWeek, endOfWeek } from 'date-fns';
 import { Button } from '../components/ui/button';
 import { Skeleton } from '../components/ui/skeleton';
-import { useAuth } from '../contexts/AuthContext'; // Assuming you have an AuthContext
+import { useAuth } from '../contexts/AuthContext';
 
 // Mock API services (replace with your real ones)
 const getVehicles = () => Promise.resolve([
@@ -76,7 +77,7 @@ export default function DashboardPage() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   
   const navigate = useNavigate();
-  const { logout, user } = useAuth(); // Assuming your AuthContext provides these
+  const { logout, user } = useAuth();
 
   // Fetch data
   const { data: vehicles, isLoading: vehiclesLoading } = useQuery({
@@ -320,6 +321,72 @@ export default function DashboardPage() {
           warning={upcomingMaintenance > 0}
           color="purple"
         />
+      </div>
+
+      {/* Quick Access Cards */}
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Real-Time Features</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Card 1: Live Tracking */}
+          <Link to="/dashboard/tracking" className="no-underline">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full border border-gray-200/50 bg-white/70 backdrop-blur-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <MapPin className="h-5 w-5 text-blue-600" />
+                  Live Tracking
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600 mb-4">
+                  Real-time vehicle locations and driver tracking with live updates
+                </p>
+                <div className="flex items-center text-blue-600 text-sm font-medium">
+                  View Tracking <ChevronRight className="h-4 w-4 ml-2" />
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Card 2: Messages */}
+          <Link to="/dashboard/messages" className="no-underline">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full border border-gray-200/50 bg-white/70 backdrop-blur-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <MessageSquare className="h-5 w-5 text-green-600" />
+                  Messages
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600 mb-4">
+                  Real-time chat with drivers, managers, and team members
+                </p>
+                <div className="flex items-center text-green-600 text-sm font-medium">
+                  Open Chat <ChevronRight className="h-4 w-4 ml-2" />
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* Card 3: Notifications */}
+          <Link to="/dashboard/notifications" className="no-underline">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full border border-gray-200/50 bg-white/70 backdrop-blur-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Bell className="h-5 w-5 text-orange-600" />
+                  Notifications
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600 mb-4">
+                  Real-time alerts for vehicle alerts, maintenance, and assignments
+                </p>
+                <div className="flex items-center text-orange-600 text-sm font-medium">
+                  View Alerts <ChevronRight className="h-4 w-4 ml-2" />
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
       </div>
 
       {/* Charts Row */}
