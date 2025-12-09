@@ -13,6 +13,7 @@ import {
 import { Bell, Search, User as UserIcon, LogOut } from 'lucide-react'
 import { Input } from '../ui/input'
 import { cn } from '../../lib/utils'
+import NotificationCenter from '../NotificationCenter'
 
 export default function Navbar() {
   const { currentUser, logout } = useAuth()
@@ -47,10 +48,7 @@ export default function Navbar() {
         </form>
         
         <div className="flex items-center gap-4 ml-auto">
-          <button className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition">
-            <Bell className="h-5 w-5" />
-            <span className="absolute top-1 right-1 h-2 w-2 bg-red-500 rounded-full animate-pulse"></span>
-          </button>
+          <NotificationCenter />
           
           {currentUser && (
             <>

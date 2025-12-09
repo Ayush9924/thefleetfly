@@ -18,6 +18,9 @@ const MaintenancePage = lazy(() => import('./pages/MaintenancePage'))
 const FuelLogsPage = lazy(() => import('./pages/FuelLogsPage'))
 const RoutePlannerPage = lazy(() => import('./pages/RoutePlannerPage'))
 const ReportsPage = lazy(() => import('./pages/ReportsPage'))
+const LiveTrackingPage = lazy(() => import('./pages/LiveTrackingPage'))
+const ChatPage = lazy(() => import('./pages/ChatPage'))
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
 
 function App() {
   return (
@@ -59,6 +62,9 @@ function App() {
           <Route path="fuels" element={<FuelLogsPage />} />
           <Route path="routes" element={<RoutePlannerPage />} />
           <Route path="reports" element={<ReportsPage />} />
+          <Route path="tracking" element={<LiveTrackingPage />} />
+          <Route path="messages" element={<ChatPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
         </Route>
         
         <Route path="*" element={<Navigate to="/" replace />} />

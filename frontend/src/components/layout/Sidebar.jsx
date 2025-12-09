@@ -12,7 +12,10 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
-  Settings
+  Settings,
+  Map,
+  MessageSquare,
+  Bell
 } from 'lucide-react'
 import { Button } from '../ui/button'
 import { useAuth } from '../../contexts/AuthContext'
@@ -65,6 +68,24 @@ const menuItems = [
     icon: FileText, 
     path: '/dashboard/reports',
     roles: ['admin', 'manager']
+  },
+  {
+    name: 'Live Tracking',
+    icon: Map,
+    path: '/dashboard/tracking',
+    roles: ['admin', 'manager']
+  },
+  {
+    name: 'Messages',
+    icon: MessageSquare,
+    path: '/dashboard/messages',
+    roles: ['admin', 'manager', 'driver', 'mechanic']
+  },
+  {
+    name: 'Notifications',
+    icon: Bell,
+    path: '/dashboard/notifications',
+    roles: ['admin', 'manager', 'driver', 'mechanic']
   },
   { 
     name: 'Settings', 
