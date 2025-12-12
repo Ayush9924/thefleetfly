@@ -38,7 +38,7 @@ export default function ChatPage() {
   }, [conversations, selectedConversationId, loadMessages]);
 
   return (
-    <div className="space-y-6 p-4 bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
+    <div className="space-y-6 p-4 bg-linear-to-br from-slate-50 to-blue-50 min-h-screen">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
@@ -143,7 +143,7 @@ export default function ChatPage() {
                 animate={{ opacity: 1 }}
                 className="h-full flex flex-col items-center justify-center p-6 text-center"
               >
-                <div className="bg-gradient-to-br from-blue-100 to-indigo-100 p-6 rounded-full mb-6">
+                <div className="bg-linear-to-br from-blue-100 to-indigo-100 p-6 rounded-full mb-6">
                   <MessageSquare className="h-12 w-12 text-blue-600" />
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">
@@ -162,7 +162,7 @@ export default function ChatPage() {
       </div>
 
       {/* Chat Tips - Enhanced */}
-      <Card className="p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+      <Card className="p-5 bg-linear-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
         <div className="flex items-start gap-3">
           <div className="mt-0.5">
             <Lightbulb className="h-5 w-5 text-blue-600" />
