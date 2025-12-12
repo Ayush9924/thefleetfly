@@ -15,13 +15,24 @@ try {
   console.log('Leaflet icon fix:', err);
 }
 
-export default function LiveMapTracker({ drivers = [], onDriverClick = null }) {
+export default function LiveMapTracker({ drivers = [], vehicles = [], onDriverClick = null, onVehicleClick = null }) {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const markers = useRef({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [mapStyle, setMapStyle] = useState('dark');
+
+  // prevent automatic fitBounds after the user manually interacts (zoom/pan)
+  const userInteracted = useRef(false);
+  // track whether initial automatic fit was already applied
+  const initialFitDone = useRef(false);
+
+  // stable ref for the interaction handler so cleanup can access the same function
+  const interactionHandlerRef = useRef(null);
+
+  // prefer `vehicles` prop when parent passes it (LiveTrackingPage uses `vehicles`)
+  const data = (Array.isArray(vehicles) && vehicles.length > 0) ? vehicles : drivers;
 
   // Create custom vehicle icon
   const createVehicleIcon = (status, speed) => {
@@ -96,7 +107,7 @@ export default function LiveMapTracker({ drivers = [], onDriverClick = null }) {
   // Initialize map - only once
   useEffect(() => {
     console.log('Initializing map...');
-    
+
     if (map.current) {
       console.log('Map already initialized');
       return;
@@ -131,6 +142,10 @@ export default function LiveMapTracker({ drivers = [], onDriverClick = null }) {
       // Add scale
       L.control.scale({ imperial: false, position: 'bottomright' }).addTo(map.current);
 
+      // mark user interaction when user starts zooming/panning so we don't auto-fit afterwards
+      interactionHandlerRef.current = () => { userInteracted.current = true; };
+      map.current.on('movestart zoomstart dragstart', interactionHandlerRef.current);
+
       // Force resize
       setTimeout(() => {
         if (map.current) {
@@ -139,6 +154,7 @@ export default function LiveMapTracker({ drivers = [], onDriverClick = null }) {
         }
       }, 100);
 
+      // cleanup listeners on unmount (below in return)
       setIsLoading(false);
       setError(null);
       console.log('Map initialized successfully');
@@ -153,6 +169,9 @@ export default function LiveMapTracker({ drivers = [], onDriverClick = null }) {
     return () => {
       if (map.current) {
         console.log('Removing map');
+        if (interactionHandlerRef.current) {
+          try { map.current.off('movestart zoomstart dragstart', interactionHandlerRef.current); } catch(e) {}
+        }
         map.current.remove();
         map.current = null;
       }
@@ -197,81 +216,80 @@ export default function LiveMapTracker({ drivers = [], onDriverClick = null }) {
 
   // Update markers when drivers change
   useEffect(() => {
-    if (!map.current || isLoading || !drivers || drivers.length === 0) {
-      return;
-    }
-
-    console.log('Updating markers for', drivers.length, 'drivers');
+    if (!map.current || isLoading || !Array.isArray(data)) return;
 
     try {
-      // Remove old markers
-      Object.values(markers.current).forEach(marker => {
-        if (marker) {
-          map.current.removeLayer(marker);
-        }
-      });
-      markers.current = {};
-
       const bounds = L.latLngBounds();
-      let hasMarkers = false;
+      const presentIds = new Set();
 
-      // Add new markers
-      drivers.forEach(driver => {
-        if (!driver.latitude || !driver.longitude) return;
+      data.forEach(item => {
+        const id = item.vehicleId || item.driverId || item.id;
+        if (!id || !item.latitude || !item.longitude) return;
+        presentIds.add(id);
 
-        const marker = L.marker(
-          [driver.latitude, driver.longitude],
-          {
-            icon: createVehicleIcon(driver.status || 'stopped', driver.speed || 0),
-            title: driver.driverId
-          }
-        );
-
-        const popupContent = `
-          <div style="padding: 10px; min-width: 200px; font-family: system-ui, sans-serif;">
-            <div style="display: flex; align-items: center; margin-bottom: 8px;">
-              <div style="width: 8px; height: 8px; background: ${driver.status === 'active' ? '#10b981' : driver.status === 'idle' ? '#f59e0b' : '#6b7280'}; border-radius: 50%; margin-right: 8px;"></div>
-              <strong style="font-size: 14px;">${driver.driverId || 'Unknown'}</strong>
+        const popupHtml = `
+          <div style="padding:10px; min-width:200px; font-family: system-ui, sans-serif;">
+            <div style="display:flex; align-items:center; margin-bottom:8px;">
+              <div style="width:8px; height:8px; background:${item.status === 'active' ? '#10b981' : item.status === 'idle' ? '#f59e0b' : '#6b7280'}; border-radius:50%; margin-right:8px;"></div>
+              <strong style="font-size:14px;">${item.driverId || item.licensePlate || id}</strong>
             </div>
-            <div style="margin-bottom: 6px;">
-              <div style="font-size: 11px; color: #666;">Speed</div>
-              <div style="font-size: 16px; font-weight: bold; color: #2563eb;">${(driver.speed || 0).toFixed(1)} km/h</div>
+            <div style="margin-bottom:6px;">
+              <div style="font-size:11px; color:#666;">Speed</div>
+              <div style="font-size:16px; font-weight:bold; color:#2563eb;">${(item.speed || 0).toFixed(1)} km/h</div>
             </div>
-            <div style="margin-bottom: 6px;">
-              <div style="font-size: 11px; color: #666;">Location</div>
-              <div style="font-size: 12px; font-family: monospace;">${driver.latitude.toFixed(4)}, ${driver.longitude.toFixed(4)}</div>
+            <div style="margin-bottom:6px;">
+              <div style="font-size:11px; color:#666;">Location</div>
+              <div style="font-size:12px; font-family:monospace;">${item.latitude.toFixed(4)}, ${item.longitude.toFixed(4)}</div>
             </div>
           </div>
         `;
 
-        marker.bindPopup(popupContent);
-
-        if (onDriverClick && driver.driverId) {
-          marker.on('click', () => onDriverClick(driver.driverId));
+        // update existing marker
+        if (markers.current[id]) {
+          const m = markers.current[id];
+          m.setLatLng([item.latitude, item.longitude]);
+          m.setIcon(createVehicleIcon(item.status || 'stopped', item.speed || 0));
+          const popup = m.getPopup();
+          if (popup) popup.setContent(popupHtml);
+        } else {
+          // create marker
+          const m = L.marker([item.latitude, item.longitude], {
+            icon: createVehicleIcon(item.status || 'stopped', item.speed || 0),
+            title: id
+          });
+          m.bindPopup(popupHtml);
+          // support both callback names used in app
+          const clickHandler = onVehicleClick || onDriverClick;
+          if (clickHandler) m.on('click', () => clickHandler(item.driverId || item.vehicleId || id));
+          m.addTo(map.current);
+          markers.current[id] = m;
         }
 
-        marker.addTo(map.current);
-        markers.current[driver.driverId] = marker;
-        bounds.extend([driver.latitude, driver.longitude]);
-        hasMarkers = true;
+        bounds.extend([item.latitude, item.longitude]);
       });
 
-      // Fit bounds
-      if (hasMarkers && bounds.isValid()) {
-        map.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+      // remove markers no longer present
+      Object.keys(markers.current).forEach(existingId => {
+        if (!presentIds.has(existingId)) {
+          try { map.current.removeLayer(markers.current[existingId]); } catch(e){/*ignore*/ }
+          delete markers.current[existingId];
+        }
+      });
+
+      if (bounds.isValid()) {
+        // Only auto-fit on first load (or if user has not interacted). Subsequent data updates won't yank the user's zoom.
+        if (!userInteracted.current && !initialFitDone.current) {
+          map.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+          initialFitDone.current = true;
+        }
       }
 
-      // Resize
-      setTimeout(() => {
-        if (map.current) {
-          map.current.invalidateSize();
-        }
-      }, 50);
-
+      // small resize to avoid rendering glitches
+      setTimeout(() => { map.current?.invalidateSize(); }, 50);
     } catch (err) {
       console.error('Error updating markers:', err);
     }
-  }, [drivers, isLoading, onDriverClick]);
+  }, [drivers, vehicles, data, isLoading, onDriverClick, onVehicleClick]);
 
   // Handle controls
   const handleZoomIn = () => {
@@ -283,16 +301,15 @@ export default function LiveMapTracker({ drivers = [], onDriverClick = null }) {
   };
 
   const handleCenter = () => {
-    if (map.current && drivers.length > 0) {
+    if (map.current && data.length > 0) {
       const bounds = L.latLngBounds();
-      drivers.forEach(d => {
-        if (d.latitude && d.longitude) {
-          bounds.extend([d.latitude, d.longitude]);
-        }
+      data.forEach(d => {
+        if (d.latitude && d.longitude) bounds.extend([d.latitude, d.longitude]);
       });
-      if (bounds.isValid()) {
-        map.current.fitBounds(bounds, { padding: [50, 50] });
-      }
+      if (bounds.isValid()) map.current.fitBounds(bounds, { padding: [50, 50] });
+      // user explicitly requested centering — consider it a user interaction to prevent auto-fit overrides
+      userInteracted.current = true;
+      initialFitDone.current = true;
     }
   };
 
@@ -355,7 +372,7 @@ export default function LiveMapTracker({ drivers = [], onDriverClick = null }) {
         </div>
       )}
 
-      {(!drivers || drivers.length === 0) && !isLoading && !error && (
+      {(!data || data.length === 0) && !isLoading && !error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 z-40">
           <div className="w-16 h-16 bg-gray-800/60 rounded-2xl flex items-center justify-center mb-4">
             <Navigation className="h-8 w-8 text-gray-400" />
@@ -431,7 +448,7 @@ export default function LiveMapTracker({ drivers = [], onDriverClick = null }) {
             <span className="text-sm text-gray-300">Live</span>
           </div>
           <div className="h-4 w-px bg-gray-700"></div>
-          <span className="text-sm font-medium text-gray-300">{drivers.length} vehicles</span>
+          <span className="text-sm font-medium text-gray-300">{data.length} vehicles</span>
         </div>
       </div>
     </div>
