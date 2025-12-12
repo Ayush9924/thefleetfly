@@ -310,49 +310,8 @@ export default function LiveMapTracker({ drivers = [], onDriverClick = null }) {
   };
 
   // Loading state
-  if (isLoading) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 rounded-xl">
-        <div className="relative mb-4">
-          <div className="w-12 h-12 border-3 border-gray-700 border-t-blue-500 rounded-full animate-spin"></div>
-          <Navigation className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-5 w-5 text-blue-400" />
-        </div>
-        <p className="text-gray-300 text-sm font-medium">Loading Map...</p>
-        <p className="text-gray-500 text-xs">Initializing OpenStreetMap</p>
-      </div>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <AlertCircle className="h-12 w-12 text-red-400 mb-4" />
-        <h3 className="text-lg font-semibold text-white mb-2">Map Error</h3>
-        <p className="text-gray-400 text-center mb-4">{error}</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-        >
-          Reload
-        </button>
-      </div>
-    );
-  }
-
-  // No drivers
-  if (!drivers || drivers.length === 0) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 rounded-xl">
-        <div className="w-16 h-16 bg-gray-800/50 rounded-2xl flex items-center justify-center mb-4">
-          <Navigation className="h-8 w-8 text-gray-500" />
-        </div>
-        <h3 className="text-lg font-semibold text-white mb-2">No Vehicles</h3>
-        <p className="text-gray-400 text-center mb-4">Waiting for vehicle data...</p>
-      </div>
-    );
-  }
-
+  // NOTE: don't early-return here — always render the map container so the map can initialize.
+  // Show loading / error / no-data as overlays on top of the map instead.
   return (
     <div className="relative w-full h-full rounded-xl overflow-hidden">
       {/* Map container */}
@@ -365,6 +324,46 @@ export default function LiveMapTracker({ drivers = [], onDriverClick = null }) {
           minHeight: '400px'
         }}
       />
+
+      {/* OVERLAYS */}
+      {isLoading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 z-50">
+          <div className="relative mb-4">
+            <div className="w-12 h-12 border-3 border-gray-700 border-t-blue-500 rounded-full animate-spin"></div>
+            <Navigation className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-5 w-5 text-blue-400" />
+          </div>
+          <p className="text-gray-200 text-sm font-medium">Loading Map...</p>
+          <p className="text-gray-400 text-xs">Initializing OpenStreetMap</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center z-50">
+          <div className="w-[420px] max-w-full bg-gray-900/95 rounded-lg border border-gray-800 p-6 shadow-xl">
+            <div className="flex flex-col items-center">
+              <AlertCircle className="h-12 w-12 text-red-400 mb-4" />
+              <h3 className="text-lg font-semibold text-white mb-2">Map Error</h3>
+              <p className="text-gray-400 text-center mb-4">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+              >
+                Reload
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(!drivers || drivers.length === 0) && !isLoading && !error && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 z-40">
+          <div className="w-16 h-16 bg-gray-800/60 rounded-2xl flex items-center justify-center mb-4">
+            <Navigation className="h-8 w-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-white mb-2">No Vehicles</h3>
+          <p className="text-gray-300 text-center mb-4">Waiting for vehicle data...</p>
+        </div>
+      )}
 
       {/* Controls - Top Right */}
       <div className="absolute top-4 right-4 z-999 flex flex-col gap-2">
