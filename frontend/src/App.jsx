@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react'
 import Layout from './components/layout/Layout.jsx'
 import ProtectedRoute from './components/layout/ProtectedRoute.jsx'
 import PublicRoute from './components/layout/PublicRoute.jsx'
+import TestMap from './pages/TestMap'
 
 // Lazy load pages for better performance
 const LandingPage = lazy(() => import('./pages/LandingPage'))
@@ -25,14 +26,20 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage'))
 function App() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-      </div>
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
     }>
       <Routes>
         <Route path="/" element={
           <PublicRoute>
             <LandingPage />
+          </PublicRoute>
+        } />
+        
+        <Route path="/test-map" element={
+          <PublicRoute>
+            <TestMap />
           </PublicRoute>
         } />
         

@@ -1,168 +1,440 @@
-import { useEffect, useRef, useState } from 'react'
-import { useRealtime } from '../contexts/RealtimeContext'
-import { Loader } from 'lucide-react'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
+import React, { useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { Navigation, Target, ZoomIn, ZoomOut, AlertCircle, RefreshCw } from 'lucide-react';
 
-// Fix Leaflet default icons issue
-delete L.Icon.Default.prototype._getIconUrl
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-})
+// Fix Leaflet default icons
+try {
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+  });
+} catch (err) {
+  console.log('Leaflet icon fix:', err);
+}
 
-/**
- * Live Map Tracker Component
- * Displays real-time location of drivers on a map using Leaflet
- * Requires: leaflet package
- */
-export default function LiveMapTracker({
-  drivers = [],
-  zoom = 13,
-  center = null,
-  onDriverClick = null,
-  showRoutes = false,
-  autoFitBounds = true,
-}) {
-  const mapRef = useRef(null)
-  const mapInstanceRef = useRef(null)
-  const markersRef = useRef({})
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const { locations } = useRealtime()
+export default function LiveMapTracker({ drivers = [], onDriverClick = null }) {
+  const mapContainer = useRef(null);
+  const map = useRef(null);
+  const markers = useRef({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [mapStyle, setMapStyle] = useState('dark');
 
-  // Initialize map
+  // Create custom vehicle icon
+  const createVehicleIcon = (status, speed) => {
+    const colors = {
+      active: '#10b981',
+      idle: '#f59e0b',
+      stopped: '#6b7280'
+    };
+    const color = colors[status] || colors.stopped;
+
+    return L.divIcon({
+      className: 'custom-vehicle-icon',
+      html: `
+        <div style="
+          position: relative;
+          width: 40px;
+          height: 40px;
+        ">
+          <div style="
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 32px;
+            height: 32px;
+            background: ${color};
+            border: 3px solid white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            z-index: 2;
+            cursor: pointer;
+          ">
+            <span style="
+              color: white;
+              font-size: 11px;
+              font-weight: bold;
+              font-family: system-ui, -apple-system, sans-serif;
+            ">${Math.round(speed)}</span>
+          </div>
+          ${status === 'active' ? `
+            <div style="
+              position: absolute;
+              top: 50%;
+              left: 50%;
+              width: 50px;
+              height: 50px;
+              border: 2px solid ${color};
+              border-radius: 50%;
+              transform: translate(-50%, -50%);
+              opacity: 0.3;
+              animation: pulse 2s infinite;
+            "></div>
+          ` : ''}
+          <style>
+            @keyframes pulse {
+              0% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+              50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.1; }
+              100% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+            }
+          </style>
+        </div>
+      `,
+      iconSize: [40, 40],
+      iconAnchor: [20, 20],
+      popupAnchor: [0, -20]
+    });
+  };
+
+  // Initialize map - only once
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return
-
-    try {
-      // Initialize map centered on default location or first driver
-      const initialCenter = center || [40.7128, -74.006] // Default: New York
-      const mapInstance = L.map(mapRef.current, {
-        center: initialCenter,
-        zoom: zoom,
-        preferCanvas: true,
-      })
-
-      // Add tile layer (OpenStreetMap)
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19,
-      }).addTo(mapInstance)
-
-      mapInstanceRef.current = mapInstance
-      setIsLoading(false)
-    } catch (err) {
-      setError(`Failed to initialize map: ${err.message}`)
-      setIsLoading(false)
+    console.log('Initializing map...');
+    
+    if (map.current) {
+      console.log('Map already initialized');
+      return;
     }
-  }, [])
 
-  // Update markers when locations change
-  useEffect(() => {
-    if (!mapInstanceRef.current || !Array.isArray(locations) || locations.length === 0) return
+    if (!mapContainer.current) {
+      console.error('Map container not found!');
+      setError('Map container not found');
+      return;
+    }
 
     try {
-      const bounds = L.latLngBounds()
+      // Create map
+      map.current = L.map(mapContainer.current, {
+        center: [40.7128, -74.0060],
+        zoom: 12,
+        zoomControl: true,
+        attributionControl: true,
+        preferCanvas: true
+      });
 
-      // Update or create markers
-      locations.forEach((location) => {
-        if (!location.latitude || !location.longitude) return
+      console.log('Map instance created:', map.current);
 
-        const key = location.driverId
+      // Add tile layer
+      const tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap, © CartoDB',
+        subdomains: 'abcd',
+        maxZoom: 20
+      });
+      tileLayer.addTo(map.current);
 
-        if (markersRef.current[key]) {
-          // Update existing marker
-          markersRef.current[key].setLatLng([
-            location.latitude,
-            location.longitude,
-          ])
-        } else {
-          // Create new marker
-          const marker = L.marker([location.latitude, location.longitude], {
-            title: `Driver: ${location.driverId}`,
-          })
-            .bindPopup(
-              `<strong>${location.driverId}</strong><br/>Speed: ${(
-                location.speed || 0
-              ).toFixed(2)} km/h<br/>Updated: ${new Date(
-                location.timestamp
-              ).toLocaleTimeString()}`
-            )
-            .addTo(mapInstanceRef.current)
+      // Add scale
+      L.control.scale({ imperial: false, position: 'bottomright' }).addTo(map.current);
 
-          if (onDriverClick) {
-            marker.on('click', () => onDriverClick(location.driverId))
+      // Force resize
+      setTimeout(() => {
+        if (map.current) {
+          map.current.invalidateSize();
+          console.log('Map resized');
+        }
+      }, 100);
+
+      setIsLoading(false);
+      setError(null);
+      console.log('Map initialized successfully');
+
+    } catch (err) {
+      console.error('Error initializing map:', err);
+      setError(`Failed to initialize map: ${err.message}`);
+      setIsLoading(false);
+    }
+
+    // Cleanup
+    return () => {
+      if (map.current) {
+        console.log('Removing map');
+        map.current.remove();
+        map.current = null;
+      }
+    };
+  }, []);
+
+  // Update tile layer when map style changes
+  useEffect(() => {
+    if (!map.current) return;
+
+    const tileLayer = (() => {
+      switch(mapStyle) {
+        case 'dark':
+          return L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap, © CartoDB',
+            subdomains: 'abcd',
+            maxZoom: 20
+          });
+        case 'light':
+          return L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap, © CartoDB',
+            subdomains: 'abcd',
+            maxZoom: 20
+          });
+        default:
+          return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+          });
+      }
+    })();
+
+    // Remove old tile layers
+    map.current.eachLayer((layer) => {
+      if (layer instanceof L.TileLayer) {
+        map.current.removeLayer(layer);
+      }
+    });
+
+    tileLayer.addTo(map.current);
+  }, [mapStyle]);
+
+  // Update markers when drivers change
+  useEffect(() => {
+    if (!map.current || isLoading || !drivers || drivers.length === 0) {
+      return;
+    }
+
+    console.log('Updating markers for', drivers.length, 'drivers');
+
+    try {
+      // Remove old markers
+      Object.values(markers.current).forEach(marker => {
+        if (marker) {
+          map.current.removeLayer(marker);
+        }
+      });
+      markers.current = {};
+
+      const bounds = L.latLngBounds();
+      let hasMarkers = false;
+
+      // Add new markers
+      drivers.forEach(driver => {
+        if (!driver.latitude || !driver.longitude) return;
+
+        const marker = L.marker(
+          [driver.latitude, driver.longitude],
+          {
+            icon: createVehicleIcon(driver.status || 'stopped', driver.speed || 0),
+            title: driver.driverId
           }
+        );
 
-          markersRef.current[key] = marker
+        const popupContent = `
+          <div style="padding: 10px; min-width: 200px; font-family: system-ui, sans-serif;">
+            <div style="display: flex; align-items: center; margin-bottom: 8px;">
+              <div style="width: 8px; height: 8px; background: ${driver.status === 'active' ? '#10b981' : driver.status === 'idle' ? '#f59e0b' : '#6b7280'}; border-radius: 50%; margin-right: 8px;"></div>
+              <strong style="font-size: 14px;">${driver.driverId || 'Unknown'}</strong>
+            </div>
+            <div style="margin-bottom: 6px;">
+              <div style="font-size: 11px; color: #666;">Speed</div>
+              <div style="font-size: 16px; font-weight: bold; color: #2563eb;">${(driver.speed || 0).toFixed(1)} km/h</div>
+            </div>
+            <div style="margin-bottom: 6px;">
+              <div style="font-size: 11px; color: #666;">Location</div>
+              <div style="font-size: 12px; font-family: monospace;">${driver.latitude.toFixed(4)}, ${driver.longitude.toFixed(4)}</div>
+            </div>
+          </div>
+        `;
+
+        marker.bindPopup(popupContent);
+
+        if (onDriverClick && driver.driverId) {
+          marker.on('click', () => onDriverClick(driver.driverId));
         }
 
-        bounds.extend([location.latitude, location.longitude])
-      })
+        marker.addTo(map.current);
+        markers.current[driver.driverId] = marker;
+        bounds.extend([driver.latitude, driver.longitude]);
+        hasMarkers = true;
+      });
 
-      // Auto-fit bounds if enabled and we have locations
-      if (autoFitBounds && locations.length > 0 && bounds.isValid()) {
-        try {
-          mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] })
-        } catch (err) {
-          console.warn('Could not fit bounds:', err)
-        }
+      // Fit bounds
+      if (hasMarkers && bounds.isValid()) {
+        map.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
       }
 
-      // Remove markers for drivers no longer in locations
-      Object.keys(markersRef.current).forEach((driverId) => {
-        if (!locations.some((loc) => loc.driverId === driverId)) {
-          mapInstanceRef.current.removeLayer(markersRef.current[driverId])
-          delete markersRef.current[driverId]
+      // Resize
+      setTimeout(() => {
+        if (map.current) {
+          map.current.invalidateSize();
         }
-      })
-    } catch (err) {
-      console.error('Error updating markers:', err)
-    }
-  }, [locations, onDriverClick, autoFitBounds])
+      }, 50);
 
+    } catch (err) {
+      console.error('Error updating markers:', err);
+    }
+  }, [drivers, isLoading, onDriverClick]);
+
+  // Handle controls
+  const handleZoomIn = () => {
+    if (map.current) map.current.zoomIn();
+  };
+
+  const handleZoomOut = () => {
+    if (map.current) map.current.zoomOut();
+  };
+
+  const handleCenter = () => {
+    if (map.current && drivers.length > 0) {
+      const bounds = L.latLngBounds();
+      drivers.forEach(d => {
+        if (d.latitude && d.longitude) {
+          bounds.extend([d.latitude, d.longitude]);
+        }
+      });
+      if (bounds.isValid()) {
+        map.current.fitBounds(bounds, { padding: [50, 50] });
+      }
+    }
+  };
+
+  const handleRefresh = () => {
+    if (map.current) {
+      map.current.invalidateSize();
+      console.log('Map refreshed');
+    }
+  };
+
+  const handleStyleChange = () => {
+    const styles = ['dark', 'light', 'street'];
+    const idx = styles.indexOf(mapStyle);
+    setMapStyle(styles[(idx + 1) % styles.length]);
+  };
+
+  // Loading state
   if (isLoading) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-100">
-        <Loader className="animate-spin" />
+      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 rounded-xl">
+        <div className="relative mb-4">
+          <div className="w-12 h-12 border-3 border-gray-700 border-t-blue-500 rounded-full animate-spin"></div>
+          <Navigation className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-5 w-5 text-blue-400" />
+        </div>
+        <p className="text-gray-300 text-sm font-medium">Loading Map...</p>
+        <p className="text-gray-500 text-xs">Initializing OpenStreetMap</p>
       </div>
-    )
+    );
   }
 
+  // Error state
   if (error) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-blue-50 border border-blue-200 rounded-lg">
-        <div className="text-center p-6">
-          <p className="text-blue-600 font-semibold mb-2">Map Unavailable</p>
-          <p className="text-blue-500 text-sm mb-4">{error}</p>
-          <p className="text-blue-500 text-xs">Install with: npm install leaflet</p>
-          <div className="mt-4 p-4 bg-white rounded border border-blue-200">
-            <p className="text-gray-600 text-sm">Showing driver list below instead</p>
-          </div>
-        </div>
+      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 rounded-xl border border-gray-800 p-6">
+        <AlertCircle className="h-12 w-12 text-red-400 mb-4" />
+        <h3 className="text-lg font-semibold text-white mb-2">Map Error</h3>
+        <p className="text-gray-400 text-center mb-4">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+        >
+          Reload
+        </button>
       </div>
-    )
+    );
   }
 
-  if (drivers.length === 0) {
+  // No drivers
+  if (!drivers || drivers.length === 0) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-100 rounded-lg">
-        <div className="text-center">
-          <p className="text-gray-600 font-semibold">No drivers to display</p>
-          <p className="text-gray-500 text-sm">Drivers will appear here when they share their location</p>
+      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900 rounded-xl">
+        <div className="w-16 h-16 bg-gray-800/50 rounded-2xl flex items-center justify-center mb-4">
+          <Navigation className="h-8 w-8 text-gray-500" />
         </div>
+        <h3 className="text-lg font-semibold text-white mb-2">No Vehicles</h3>
+        <p className="text-gray-400 text-center mb-4">Waiting for vehicle data...</p>
       </div>
-    )
+    );
   }
 
   return (
-    <div
-      ref={mapRef}
-      className="w-full h-full rounded-lg overflow-hidden border border-gray-200 bg-gray-50"
-      style={{ minHeight: '400px', position: 'relative' }}
-    />
-  )
-  )
+    <div className="relative w-full h-full rounded-xl overflow-hidden">
+      {/* Map container */}
+      <div
+        ref={mapContainer}
+        className="w-full h-full bg-gray-800"
+        style={{
+          width: '100%',
+          height: '100%',
+          minHeight: '400px'
+        }}
+      />
+
+      {/* Controls - Top Right */}
+      <div className="absolute top-4 right-4 z-999 flex flex-col gap-2">
+        <button
+          onClick={handleCenter}
+          className="bg-gray-900/90 hover:bg-gray-800 p-3 rounded-lg border border-gray-700 shadow-lg transition-all"
+          title="Center"
+        >
+          <Target className="h-5 w-5 text-gray-300" />
+        </button>
+        <button
+          onClick={handleZoomIn}
+          className="bg-gray-900/90 hover:bg-gray-800 p-3 rounded-lg border border-gray-700 shadow-lg transition-all"
+          title="Zoom In"
+        >
+          <ZoomIn className="h-5 w-5 text-gray-300" />
+        </button>
+        <button
+          onClick={handleZoomOut}
+          className="bg-gray-900/90 hover:bg-gray-800 p-3 rounded-lg border border-gray-700 shadow-lg transition-all"
+          title="Zoom Out"
+        >
+          <ZoomOut className="h-5 w-5 text-gray-300" />
+        </button>
+        <button
+          onClick={handleStyleChange}
+          className="bg-gray-900/90 hover:bg-gray-800 p-3 rounded-lg border border-gray-700 shadow-lg transition-all text-sm font-medium text-gray-300"
+          title="Style"
+        >
+          {mapStyle === 'dark' ? '🌙' : mapStyle === 'light' ? '☀️' : '🗺️'}
+        </button>
+        <button
+          onClick={handleRefresh}
+          className="bg-gray-900/90 hover:bg-gray-800 p-3 rounded-lg border border-gray-700 shadow-lg transition-all"
+          title="Refresh"
+        >
+          <RefreshCw className="h-5 w-5 text-gray-300" />
+        </button>
+      </div>
+
+      {/* Status - Bottom Left */}
+      <div className="absolute bottom-4 left-4 z-999 bg-gray-900/90 backdrop-blur rounded-lg border border-gray-700 p-4 shadow-lg">
+        <h4 className="text-sm font-semibold text-white mb-3">Vehicle Status</h4>
+        <div className="space-y-2">
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+            <span className="text-xs text-gray-300">Active</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+            <span className="text-xs text-gray-300">Idle</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
+            <span className="text-xs text-gray-300">Stopped</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Live Badge - Top Left */}
+      <div className="absolute top-4 left-4 z-999 bg-gray-900/90 backdrop-blur rounded-lg border border-gray-700 p-3 shadow-lg">
+        <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <span className="text-sm text-gray-300">Live</span>
+          </div>
+          <div className="h-4 w-px bg-gray-700"></div>
+          <span className="text-sm font-medium text-gray-300">{drivers.length} vehicles</span>
+        </div>
+      </div>
+    </div>
+  );
 }
