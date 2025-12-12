@@ -68,6 +68,13 @@ A comprehensive full-stack fleet management application built with **Node.js/Exp
   - Driver analytics
   - Cost analysis and trends
 
+- **Real-Time Features** ⭐ NEW
+  - Live vehicle tracking with Leaflet maps
+  - Real-time location updates via Socket.io
+  - Live driver notifications
+  - Real-time chat messaging between dispatchers and drivers
+  - Instant updates on assignments and maintenance alerts
+
 ---
 
 ## 🛠️ Tech Stack
@@ -75,6 +82,7 @@ A comprehensive full-stack fleet management application built with **Node.js/Exp
 ### Backend
 - **Runtime:** Node.js
 - **Framework:** Express.js (v5.2.1)
+- **Real-Time:** Socket.io (v4.8.1)
 - **Database:** MongoDB with Mongoose (v9.0.1)
 - **Authentication:** JWT (jsonwebtoken)
 - **Password Hashing:** bcryptjs
@@ -91,6 +99,7 @@ A comprehensive full-stack fleet management application built with **Node.js/Exp
 - **Styling:** Tailwind CSS
 - **UI Components:** Radix UI, Lucide React
 - **Maps:** Leaflet, React Leaflet
+- **Real-Time:** Socket.io-client (v4.8.1)
 - **Form Handling:** React Hook Form with Zod validation
 - **Data Fetching:** Axios, React Query
 - **Charting:** Recharts
@@ -135,8 +144,12 @@ fleet-app/
 │   │   └── reportRoutes.js
 │   ├── middleware/
 │   │   ├── auth.js               # JWT authentication
+│   │   ├── socketAuth.js         # Socket.io authentication
 │   │   ├── error.js              # Error handling
 │   │   └── upload.js             # File upload handling
+│   ├── services/
+│   │   ├── socketService.js      # Socket.io event handlers
+│   │   └── locationService.js    # Location tracking service
 │   ├── seeders/
 │   │   └── seed.js               # Database seeding
 │   ├── uploads/                  # Uploaded files storage
@@ -152,6 +165,10 @@ fleet-app/
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
+│   │   │   ├── LiveMapTracker.jsx    # Real-time vehicle tracking map
+│   │   │   ├── ChatList.jsx          # Live chat component
+│   │   │   ├── ChatWindow.jsx        # Chat messaging
+│   │   │   ├── NotificationCenter.jsx # Notifications
 │   │   │   ├── layout/
 │   │   │   │   ├── Layout.jsx
 │   │   │   │   ├── Navbar.jsx
@@ -180,15 +197,27 @@ fleet-app/
 │   │   │   ├── MaintenancePage.jsx
 │   │   │   ├── FuelLogsPage.jsx
 │   │   │   ├── RoutePlannerPage.jsx
+│   │   │   ├── LiveTrackingPage.jsx
+│   │   │   ├── ChatPage.jsx
+│   │   │   ├── NotificationsPage.jsx
 │   │   │   └── ReportsPage.jsx
 │   │   ├── services/
-│   │   │   ├── api.jsx           # API client configuration
+│   │   │   ├── api.jsx                # API client configuration
 │   │   │   ├── authService.jsx
 │   │   │   └── index.jsx
 │   │   ├── contexts/
-│   │   │   └── AuthContext.jsx   # Authentication context
+│   │   │   ├── AuthContext.jsx        # Authentication context
+│   │   │   ├── RealtimeContext.jsx    # Real-time events context
+│   │   │   └── QueryProvider.jsx      # React Query provider
+│   │   ├── hooks/
+│   │   │   ├── useSocketChat.js       # Socket.io chat hook
+│   │   │   ├── useSocketLocation.js   # Socket.io location hook
+│   │   │   ├── useSocketNotifications.js # Socket.io notifications hook
+│   │   │   └── index.js
 │   │   ├── lib/
-│   │   │   └── utils.js          # Utility functions
+│   │   │   ├── socket.js              # Socket.io configuration
+│   │   │   ├── mockLocationData.js    # Mock location data
+│   │   │   └── utils.js               # Utility functions
 │   │   ├── App.jsx
 │   │   ├── main.jsx
 │   │   └── index.css
@@ -332,7 +361,72 @@ Then open your browser to `http://localhost:5173`
 
 ---
 
-## 📡 API Documentation
+## � Real-Time Features (Socket.io)
+
+The application now includes real-time communication using **Socket.io** for live vehicle tracking, chat, and notifications.
+
+### Features
+- **Live Vehicle Tracking**: Real-time location updates from drivers displayed on interactive map
+- **Live Chat**: Instant messaging between dispatchers and drivers
+- **Notifications**: Real-time alerts for assignments, maintenance, and system updates
+- **Location History**: Track vehicle movement history
+
+### Socket.io Events
+
+#### Location Events
+```javascript
+// Client emits location update
+socket.emit('driver-location-update', {
+  driverId: 'driver123',
+  latitude: 40.7128,
+  longitude: -74.0060,
+  speed: 45,
+  heading: 90
+});
+
+// Server broadcasts to all clients
+socket.on('driver-location-updated', (data) => {
+  // Update map with new location
+});
+```
+
+#### Chat Events
+```javascript
+// Send message
+socket.emit('send-message', {
+  senderId: 'user123',
+  recipientId: 'user456',
+  message: 'Hello!',
+  timestamp: Date.now()
+});
+
+// Receive message
+socket.on('receive-message', (data) => {
+  // Display message
+});
+```
+
+#### Notification Events
+```javascript
+// Server sends notifications
+socket.on('notification', (data) => {
+  // notification alert
+});
+```
+
+### Authentication
+Socket.io connections are authenticated using JWT tokens. The token is sent as:
+```javascript
+socket.io(url, {
+  auth: {
+    token: localStorage.getItem('token')
+  }
+});
+```
+
+---
+
+## �📡 API Documentation
 
 ### Base URL
 ```
@@ -584,6 +678,53 @@ Current test coverage:
 - ✅ CORS protection
 - ✅ Helmet security headers
 - ✅ Protected routes with middleware
+- ✅ Socket.io authentication
+
+---
+
+## 🎯 Development Credentials
+
+For testing purposes, use these default credentials:
+
+| Email | Password | Role |
+|-------|----------|------|
+| admin@fleet.com | admin123 | Admin |
+| karan@202@gmail.com | karan@202 | Manager |
+
+> **Note:** These are development credentials only. Replace with proper user management in production.
+
+---
+
+## 🐛 Troubleshooting
+
+### Maps Not Loading
+- Clear browser cache (Ctrl+Shift+R)
+- Ensure Leaflet CSS is loaded properly
+- Check that `VITE_API_URL` is correctly configured
+- Verify backend is running on port 5000
+
+### Socket.io Connection Issues
+- Ensure backend server is running
+- Check CORS configuration matches your frontend URL
+- Verify JWT token is present in browser localStorage
+- Check browser console for WebSocket errors
+
+### MongoDB Connection Errors
+- Verify MongoDB URI in `.env`
+- For MongoDB Atlas: Ensure your IP is whitelisted
+- Check network connectivity to database server
+- Verify credentials are correct
+
+### Authentication Failures
+- Ensure backend is running on correct port (5000)
+- Clear browser cache and localStorage
+- Check that JWT_SECRET matches in backend
+- Verify API endpoint URL in frontend configuration
+
+### Port Already in Use
+- Windows: `Get-Process -Id (Get-NetTCPConnection -LocalPort 5000).OwningProcess | Stop-Process`
+- Linux/Mac: `lsof -ti:5000 | xargs kill -9`
+- Or change PORT in `.env` file
 - ✅ File upload validation
 - ✅ Input validation with Zod
 
@@ -664,6 +805,14 @@ For support, please open an issue on the GitHub repository or contact the develo
 
 ---
 
-**Last Updated:** December 9, 2025
+**Last Updated:** December 13, 2025
+
+### Recent Changes
+- ✅ Real-time vehicle tracking with Socket.io
+- ✅ Live chat and notification system
+- ✅ Enhanced authentication with fallback credentials
+- ✅ Fixed API endpoint configuration
+- ✅ GitHub code synchronized while keeping servers running
+- ✅ Leaflet map integration with custom styling
 
 Happy Fleet Managing! 🚚✨
