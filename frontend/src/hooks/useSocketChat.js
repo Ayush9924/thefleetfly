@@ -59,6 +59,20 @@ export const useSocketChat = () => {
           read: false,
         },
       ])
+
+      // Update conversation preview (last message and time)
+      setConversations((prev) =>
+        prev.map((c) =>
+          c._id === data.conversationId
+            ? {
+                ...c,
+                lastMessage: data.message,
+                lastMessageTime: Date.now(),
+                unreadCount: (c.unreadCount || 0) + (activeConversation === data.conversationId ? 0 : 1),
+              }
+            : c
+        )
+      )
     }
 
     const handleTyping = (data) => {
