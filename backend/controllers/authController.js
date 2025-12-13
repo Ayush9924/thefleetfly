@@ -15,6 +15,12 @@ const devUsers = {
     name: 'Roxy',
     email: 'karan@202@gmail.com',
     role: 'manager'
+  },
+  'karan@2001@gmail.com': {
+    _id: '3',
+    name: 'Karan',
+    email: 'karan@2001@gmail.com',
+    role: 'manager'
   }
 };
 
@@ -22,6 +28,7 @@ const devUsers = {
 const verifyDevPassword = (inputPassword, email) => {
   if (email === 'admin@fleet.com' && inputPassword === 'admin123') return true;
   if (email === 'karan@202@gmail.com' && inputPassword === 'karan@202') return true;
+  if (email === 'karan@2001@gmail.com' && inputPassword === 'password123') return true;
   return false;
 };
 
@@ -102,42 +109,26 @@ const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // Check if MongoDB is available first
+    let user = null;
+    let useDevMode = false;
+
     try {
-      const user = await User.findOne({ email });
-      if (!user) {
-        return res.status(401).json({ message: 'Invalid credentials' });
-      }
-
-      const isMatch = await user.matchPassword(password);
-      if (!isMatch) {
-        return res.status(401).json({ message: 'Invalid credentials' });
-      }
-
-      const token = jwt.sign(
-        { id: user._id },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRE }
-      );
-
-      res.json({
-        user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role
-        },
-        token
-      });
+      user = await User.findOne({ email });
     } catch (dbError) {
       console.warn('⚠️  MongoDB unavailable, using development mode');
+      useDevMode = true;
+    }
 
+    if (useDevMode) {
+      // Development mode without MongoDB
       const devUser = devUsers[email];
       if (!devUser) {
-        return res.status(401).json({ message: 'Invalid credentials' });
+        return res.status(401).json({ message: 'Invalid email or password' });
       }
 
       if (!verifyDevPassword(password, email)) {
-        return res.status(401).json({ message: 'Invalid credentials' });
+        return res.status(401).json({ message: 'Invalid email or password' });
       }
 
       const token = jwt.sign(
@@ -146,7 +137,8 @@ const login = async (req, res) => {
         { expiresIn: process.env.JWT_EXPIRE }
       );
 
-      res.json({
+      console.log('✅ Development mode login successful for:', email);
+      return res.json({
         user: {
           _id: devUser._id,
           name: devUser.name,
@@ -156,6 +148,32 @@ const login = async (req, res) => {
         token
       });
     }
+
+    // MongoDB mode
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    const isMatch = await user.matchPassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRE }
+    );
+
+    res.json({
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      },
+      token
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

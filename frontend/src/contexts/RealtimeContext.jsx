@@ -1,6 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { initSocket } from '../lib/socket';
-import { getToken } from '../services/api';
 
 const RealtimeContext = createContext();
 
@@ -60,9 +59,11 @@ export const RealtimeProvider = ({ children }) => {
 
   // Initialize socket connection once with JWT token
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') || getToken() : null;
-    const s = initSocket(token);
-    setSocket(s);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (token) {
+      const s = initSocket(token);
+      setSocket(s);
+    }
 
     return () => {
       // socket will auto-disconnect when page unloads
