@@ -87,6 +87,7 @@ app.use('/api/maintenance', require('./routes/maintenanceRoutes'));
 app.use('/api/fuels', require('./routes/fuelLogRoutes'));
 app.use('/api/routes', require('./routes/routeRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));
+app.use('/api/messages', require('./routes/messageRoutes'));
 
 // Serve static files (for uploaded images)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

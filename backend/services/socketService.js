@@ -7,6 +7,10 @@
 const activeLocations = new Map(); // driverId -> { latitude, longitude, speed, heading, timestamp }
 const userSockets = new Map(); // userId -> Set of socket ids
 
+// Import models for persistence
+const Message = require('../models/Message');
+const Conversation = require('../models/Conversation');
+
 /**
  * Initialize all Socket.io event handlers
  * @param {Server} io - Socket.io server instance
@@ -272,27 +276,51 @@ const socketService = (io) => {
 
     /**
      * Send chat message
-     * Format: { conversationId, message, senderRole }
+     * Format: { conversationId, message, recipientId, senderRole }
      */
-    socket.on('chat:send_message', (data) => {
+    socket.on('chat:send_message', async (data) => {
       try {
-        const { conversationId, message, senderRole } = data;
+        const { conversationId, message, recipientId, senderRole } = data;
+
+        if (!conversationId || !message || !recipientId) {
+          socket.emit('error', 'Missing required fields: conversationId, message, recipientId');
+          return;
+        }
 
         const chatMessage = {
           conversationId,
           senderId: userId,
           senderName: socket.userName,
           senderRole: senderRole || userRole,
-          message,
+          recipientId,
+          content: message,
           timestamp: new Date().toISOString(),
           read: false
         };
 
-        // Broadcast to conversation room
+        // Save to database
+        try {
+          const msgDoc = new Message({
+            conversationId,
+            senderId: userId,
+            senderName: socket.userName,
+            senderRole: senderRole || userRole,
+            recipientId,
+            content: message,
+          });
+          await msgDoc.save();
+          chatMessage._id = msgDoc._id;
+        } catch (dbError) {
+          console.warn('⚠️  Message not saved to DB (dev mode fallback):', dbError.message);
+          // Continue anyway - message still broadcasts real-time
+        }
+
+        // Broadcast to conversation room using 'message' as key
         io.to(`chat:${conversationId}`).emit('chat:receive_message', chatMessage);
         console.log(`💬 Message sent in conversation: ${conversationId}`);
       } catch (error) {
         console.error('❌ Error in chat:send_message:', error.message);
+        socket.emit('error', `Failed to send message: ${error.message}`);
       }
     });
 

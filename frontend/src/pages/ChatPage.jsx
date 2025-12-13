@@ -2,52 +2,175 @@ import { useState, useEffect } from "react";
 import { useSocketChat } from "../hooks/useSocketChat";
 import ChatList from "../components/ChatList";
 import ChatWindow from "../components/ChatWindow";
-import { Card } from "../components/ui/card";
-import {
-  MessageSquare,
-  Users,
-  Shield,
-  Search,
-  Plus,
-  Sparkles,
-  Zap,
-  Send,
-} from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
+import { Plus, MessageSquare } from "lucide-react";
+import api from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
 
-/**
- * 🚀 2025 Real-Time Chat Dashboard
- * Modern, stylish messaging hub with beautiful animations
- */
 export default function ChatPage() {
+  const { user } = useAuth();
+  const {conversations, setConversations, startConversation, isConnected } = useSocketChat();
   const [selectedConversationId, setSelectedConversationId] = useState(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const { conversations, loadMessages, isLoading } = useSocketChat();
+  const [showNewConversation, setShowNewConversation] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const selectedConversation = conversations.find(
-    (conv) => conv._id === selectedConversationId
-  );
+  // Fetch all users
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoadingUsers(true);
+        const [driversRes, managersRes] = await Promise.all([
+          api.get("/drivers"),
+          api.get("/drivers"), // You might have a managers endpoint
+        ]);
+        const allUsersList = [...driversRes.data].filter((u) => u._id !== user?._id);
+        setAllUsers(allUsersList);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+    fetchUsers();
+  }, [user]);
+
+  // Load conversations
+  useEffect(() => {
+    const loadConversations = async () => {
+      try {
+        const response = await api.get("/messages/conversations");
+        setConversations(response.data);
+      } catch (error) {
+        console.error("Error loading conversations:", error);
+      }
+    };
+    if (isConnected) {
+      loadConversations();
+    }
+  }, [isConnected, setConversations]);
 
   const handleSelectConversation = (conversationId) => {
     setSelectedConversationId(conversationId);
-    loadMessages(conversationId);
-    if (window.innerWidth < 1024) {
-      setIsSidebarOpen(false); // Auto-close on mobile after selection
+  };
+
+  const handleStartNewConversation = async (otherUserId) => {
+    try {
+      setLoading(true);
+      const response = await api.post("/messages/conversations/start", {
+        otherUserId,
+      });
+      const newConv = response.data;
+
+      // Add to list if not exists
+      if (!conversations.find((c) => c.conversationId === newConv.conversationId)) {
+        setConversations([...conversations, newConv]);
+      }
+
+      // Join via socket
+      startConversation(otherUserId);
+
+      setSelectedConversationId(newConv.conversationId);
+      setShowNewConversation(false);
+    } catch (error) {
+      console.error("Error starting conversation:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Auto-select first conversation if none selected
-  useEffect(() => {
-    if (!selectedConversationId && conversations.length > 0) {
-      setSelectedConversationId(conversations[0]._id);
-      loadMessages(conversations[0]._id);
-    }
-  }, [conversations, selectedConversationId, loadMessages]);
+  const selectedConv = conversations.find((c) => c.conversationId === selectedConversationId);
+  const getOtherUserName = (conv) => {
+    if (!conv.participants || conv.participants.length === 0) return "Unknown";
+    const other = conv.participants.find((p) => p.userId?._id !== user?._id && p.userId !== user?._id);
+    return other?.userName || other?.userId?.name || "Unknown";
+  };
 
-  const unreadCount = conversations.filter((c) => c.unreadCount > 0).length;
-  const totalMessages = conversations.reduce(
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+            <MessageSquare className="w-8 h-8 text-blue-600" />
+            Messages
+          </h1>
+          <p className="text-gray-600 mt-2">Send messages to drivers, managers, and team members in real-time</p>
+          {!isConnected && (
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
+              ⚠️ Connecting to real-time service...
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Sidebar */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden sticky top-8">
+              <div className="p-4 border-b border-gray-200">
+                <button
+                  onClick={() => setShowNewConversation(!showNewConversation)}
+                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  {showNewConversation ? "Cancel" : "New Message"}
+                </button>
+              </div>
+
+              {/* New Conversation List */}
+              {showNewConversation && (
+                <div className="border-b border-gray-200">
+                  <div className="p-4 max-h-64 overflow-y-auto space-y-2">
+                    {loadingUsers ? (
+                      <p className="text-sm text-gray-500 py-4 text-center">Loading users...</p>
+                    ) : allUsers.length === 0 ? (
+                      <p className="text-sm text-gray-500 py-4 text-center">No users available</p>
+                    ) : (
+                      allUsers.map((u) => (
+                        <button
+                          key={u._id}
+                          onClick={() => handleStartNewConversation(u._id)}
+                          disabled={loading}
+                          className="w-full text-left px-3 py-2 rounded-lg hover:bg-blue-50 transition disabled:opacity-50"
+                        >
+                          <div className="font-medium text-gray-900 text-sm">{u.name}</div>
+                          <div className="text-xs text-gray-500">{u.role || "User"}</div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Chat List */}
+              <ChatList
+                onSelectConversation={handleSelectConversation}
+                selectedId={selectedConversationId}
+              />
+            </div>
+          </div>
+
+          {/* Main Chat Area */}
+          <div className="lg:col-span-2">
+            {selectedConv ? (
+              <ChatWindow
+                conversationId={selectedConversationId}
+                otherUserName={getOtherUserName(selectedConv)}
+              />
+            ) : (
+              <div className="bg-white rounded-lg border border-gray-200 h-96 flex flex-col items-center justify-center text-center">
+                <MessageSquare className="w-16 h-16 text-gray-300 mb-4" />
+                <p className="text-gray-600 font-medium">No conversation selected</p>
+                <p className="text-gray-500 text-sm mt-1">
+                  Choose a conversation or start a new message to get started
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
     (sum, c) => sum + (c.unreadCount || 0),
     0
   );
