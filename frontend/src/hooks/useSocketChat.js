@@ -11,6 +11,35 @@ export const useSocketChat = () => {
   const [conversations, setConversations] = useState([])
   const [typingUsers, setTypingUsers] = useState({})
   const [activeConversation, setActiveConversation] = useState(null)
+  // Handle server-emitted conversation creation
+  useEffect(() => {
+    if (!socket) return
+
+    const handleConversationStarted = ({ conversationId, participants }) => {
+      setConversations((prev) => {
+        const exists = prev.find((c) => c._id === conversationId)
+        if (exists) return prev
+        return [
+          ...prev,
+          {
+            _id: conversationId,
+            participantName: participants?.find((p) => p !== 'self') || 'Participant',
+            lastMessage: '',
+            lastMessageTime: Date.now(),
+            unreadCount: 0,
+          },
+        ]
+      })
+      setActiveConversation(conversationId)
+      socket.emit('chat:join_conversation', { conversationId })
+    }
+
+    socket.on('chat:conversation_started', handleConversationStarted)
+
+    return () => {
+      socket.off('chat:conversation_started', handleConversationStarted)
+    }
+  }, [socket, setConversations])
 
   /**
    * Subscribe to incoming messages for the active conversation
@@ -18,14 +47,14 @@ export const useSocketChat = () => {
   useEffect(() => {
     if (!socket || !activeConversation) return
 
-    const handleNewMessage = (data) => {
+    const handleReceiveMessage = (data) => {
       setMessages((prev) => [
         ...prev,
         {
           _id: data._id || Math.random().toString(36),
-          sender: data.sender,
+          sender: data.senderId,
           senderName: data.senderName,
-          content: data.content,
+          content: data.message,
           timestamp: data.timestamp || new Date().toISOString(),
           read: false,
         },
@@ -51,11 +80,11 @@ export const useSocketChat = () => {
       }, 3000)
     }
 
-    socket.on('chat:new_message', handleNewMessage)
+    socket.on('chat:receive_message', handleReceiveMessage)
     socket.on('chat:user_typing', handleTyping)
 
     return () => {
-      socket.off('chat:new_message', handleNewMessage)
+      socket.off('chat:receive_message', handleReceiveMessage)
       socket.off('chat:user_typing', handleTyping)
     }
   }, [socket, activeConversation])
@@ -66,12 +95,12 @@ export const useSocketChat = () => {
    * @param {String} recipientId - ID of message recipient
    */
   const sendMessage = useCallback(
-    (content, recipientId) => {
+    (content, conversationId) => {
       if (!socket || !content.trim()) return
 
       socket.emit('chat:send_message', {
-        recipientId,
-        content: content.trim(),
+        conversationId,
+        message: content.trim(),
       })
 
       // Optimistic update
@@ -116,9 +145,7 @@ export const useSocketChat = () => {
       setMessages([])
       setTypingUsers({})
 
-      socket.emit('chat:load_messages', {
-        conversationId,
-      })
+      socket.emit('chat:join_conversation', { conversationId })
     },
     [socket]
   )

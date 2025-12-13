@@ -11,6 +11,7 @@ export default function ChatList({ onSelectConversation, selectedId = null }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [filteredConversations, setFilteredConversations] = useState([])
   const [isLoading, setIsLoading] = useState(false)
+  const [newUserId, setNewUserId] = useState('')
 
   // Filter conversations based on search
   useEffect(() => {
@@ -27,10 +28,12 @@ export default function ChatList({ onSelectConversation, selectedId = null }) {
     setFilteredConversations(filtered)
   }, [searchQuery, conversations])
 
-  const handleStartConversation = (userId) => {
+  const handleStartConversation = () => {
+    if (!newUserId.trim()) return
     setIsLoading(true)
-    startConversation(userId)
-    // Loading state clears after socket event
+    startConversation(newUserId.trim())
+    setNewUserId('')
+    setIsLoading(false)
   }
 
   const formatTime = (timestamp) => {
@@ -135,11 +138,24 @@ export default function ChatList({ onSelectConversation, selectedId = null }) {
         )}
       </div>
 
-      {/* New Chat Button */}
+      {/* New Chat Controls */}
       <div className="p-4 border-t border-gray-200 bg-gray-50">
-        <button className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium text-sm">
-          + New Conversation
-        </button>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Enter user ID to chat"
+            value={newUserId}
+            onChange={(e) => setNewUserId(e.target.value)}
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          />
+          <button
+            onClick={handleStartConversation}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium text-sm"
+            disabled={isLoading}
+          >
+            + New Conversation
+          </button>
+        </div>
       </div>
     </div>
   )

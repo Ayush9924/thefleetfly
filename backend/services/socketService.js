@@ -242,6 +242,35 @@ const socketService = (io) => {
     });
 
     /**
+     * Create or resolve a conversation between two users
+     * Deterministic room id: chat:{sortedUserIdA_userIdB}
+     */
+    socket.on('chat:start_conversation', (data) => {
+      try {
+        const { userId: otherUserId } = data;
+        if (!otherUserId) {
+          socket.emit('error', 'Invalid user to start conversation');
+          return;
+        }
+
+        // Deterministic conversation id based on the two userIds
+        const sorted = [String(userId), String(otherUserId)].sort();
+        const conversationId = `${sorted[0]}_${sorted[1]}`;
+
+        // Join both participants to room (this socket now; other will join on open)
+        socket.join(`chat:${conversationId}`);
+        socket.emit('chat:conversation_started', {
+          conversationId,
+          participants: sorted,
+        });
+
+        console.log(`💬 Conversation started: ${conversationId}`);
+      } catch (error) {
+        console.error('❌ Error in chat:start_conversation:', error.message);
+      }
+    });
+
+    /**
      * Send chat message
      * Format: { conversationId, message, senderRole }
      */

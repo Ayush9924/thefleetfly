@@ -1,4 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { initSocket } from '../lib/socket';
+import { getToken } from '../services/api';
 
 const RealtimeContext = createContext();
 
@@ -7,6 +9,7 @@ export const useRealtime = () => useContext(RealtimeContext);
 export const RealtimeProvider = ({ children }) => {
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [socket, setSocket] = useState(null);
 
   // Real US city coordinates for realistic data
   const realCities = [
@@ -55,6 +58,17 @@ export const RealtimeProvider = ({ children }) => {
     return vehicles;
   };
 
+  // Initialize socket connection once with JWT token
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') || getToken() : null;
+    const s = initSocket(token);
+    setSocket(s);
+
+    return () => {
+      // socket will auto-disconnect when page unloads
+    };
+  }, []);
+
   // Initialize with mock data
   useEffect(() => {
     const initialData = generateInitialData();
@@ -90,7 +104,7 @@ export const RealtimeProvider = ({ children }) => {
   }, []);
 
   return (
-    <RealtimeContext.Provider value={{ locations, loading }}>
+    <RealtimeContext.Provider value={{ locations, loading, socket }}>
       {children}
     </RealtimeContext.Provider>
   );
