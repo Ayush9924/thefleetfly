@@ -3,10 +3,9 @@
  * Manages all real-time communication for the fleet app
  */
 
-// In-memory storage
+// In-memory location storage (for development)
 const activeLocations = new Map(); // driverId -> { latitude, longitude, speed, heading, timestamp }
 const userSockets = new Map(); // userId -> Set of socket ids
-const activeUsers = new Map(); // userId -> { id, name, role, socketId, connectedAt }
 
 // Import models for persistence
 const Message = require('../models/Message');
@@ -29,40 +28,6 @@ const socketService = (io) => {
       userSockets.set(userId, new Set());
     }
     userSockets.get(userId).add(socket.id);
-
-    // ==================== PRESENCE TRACKING ====================
-
-    /**
-     * User comes online - broadcast to all clients
-     */
-    activeUsers.set(userId, {
-      id: userId,
-      name: userName,
-      role: userRole,
-      socketId: socket.id,
-      connectedAt: new Date(),
-      status: 'online'
-    });
-
-    // Broadcast updated user list to all clients
-    const userList = Array.from(activeUsers.values());
-    io.emit('users:online', { users: userList });
-    console.log(`👥 Active users: ${activeUsers.size}`);
-
-    /**
-     * Emit all active users to newly connected client
-     */
-    socket.emit('users:list', { users: userList });
-
-    /**
-     * Broadcast that this user came online
-     */
-    socket.broadcast.emit('user:online', {
-      id: userId,
-      name: userName,
-      role: userRole,
-      status: 'online'
-    });
 
     // ==================== LOCATION TRACKING EVENTS ====================
 
@@ -549,22 +514,6 @@ const socketService = (io) => {
           userSocketSet.delete(socket.id);
           if (userSocketSet.size === 0) {
             userSockets.delete(userId);
-            
-            // User completely offline - remove from active users
-            activeUsers.delete(userId);
-            
-            // Broadcast that user went offline
-            io.emit('user:offline', {
-              id: userId,
-              name: userName,
-              status: 'offline'
-            });
-            
-            // Send updated user list
-            const userList = Array.from(activeUsers.values());
-            io.emit('users:online', { users: userList });
-            
-            console.log(`❌ User offline: ${userName} - Active users: ${activeUsers.size}`);
           }
         }
 

@@ -9,8 +9,6 @@ export const RealtimeProvider = ({ children }) => {
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [socket, setSocket] = useState(null);
-  const [activeUsers, setActiveUsers] = useState([]);
-  const [onlineStatus, setOnlineStatus] = useState({});
 
   // Real US city coordinates for realistic data
   const realCities = [
@@ -106,64 +104,8 @@ export const RealtimeProvider = ({ children }) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Listen for active users and presence events
-  useEffect(() => {
-    if (!socket) return;
-
-    // Receive list of all active users
-    socket.on('users:list', (data) => {
-      setActiveUsers(data.users || []);
-      const statusMap = {};
-      data.users?.forEach((user) => {
-        statusMap[user.id] = 'online';
-      });
-      setOnlineStatus(statusMap);
-    });
-
-    // Receive updated user list when users come online
-    socket.on('users:online', (data) => {
-      setActiveUsers(data.users || []);
-      const statusMap = {};
-      data.users?.forEach((user) => {
-        statusMap[user.id] = 'online';
-      });
-      setOnlineStatus(statusMap);
-    });
-
-    // User came online
-    socket.on('user:online', (data) => {
-      setOnlineStatus((prev) => ({
-        ...prev,
-        [data.id]: 'online'
-      }));
-      // Add to active users if not exists
-      setActiveUsers((prev) => {
-        const exists = prev.find((u) => u.id === data.id);
-        if (exists) return prev;
-        return [...prev, data];
-      });
-    });
-
-    // User went offline
-    socket.on('user:offline', (data) => {
-      setOnlineStatus((prev) => ({
-        ...prev,
-        [data.id]: 'offline'
-      }));
-      // Remove from active users
-      setActiveUsers((prev) => prev.filter((u) => u.id !== data.id));
-    });
-
-    return () => {
-      socket.off('users:list');
-      socket.off('users:online');
-      socket.off('user:online');
-      socket.off('user:offline');
-    };
-  }, [socket]);
-
   return (
-    <RealtimeContext.Provider value={{ locations, loading, socket, activeUsers, onlineStatus }}>
+    <RealtimeContext.Provider value={{ locations, loading, socket }}>
       {children}
     </RealtimeContext.Provider>
   );
