@@ -60,10 +60,48 @@ export default function ChatList({ onSelectConversation, selectedId = null }) {
       .toUpperCase()
   }
 
+  const getParticipantName = (conv) => {
+    // Get current user ID
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
+    const currentUserId = currentUser._id
+
+    // Find the other participant (not the current user)
+    if (!conv.participants || conv.participants.length === 0) {
+      return conv.participantName || 'Unknown'
+    }
+
+    // For direct conversations, find the other person
+    const otherParticipant = conv.participants.find(
+      (p) => String(p.userId?._id || p.userId) !== String(currentUserId)
+    )
+
+    if (otherParticipant) {
+      // Populated user data has _id and name
+      if (otherParticipant.userId?.name) {
+        return otherParticipant.userId.name
+      }
+      // Fallback to stored userName
+      if (otherParticipant.userName) {
+        return otherParticipant.userName
+      }
+      // Fallback to participantName from socket data
+      return conv.participantName || 'Unknown'
+    }
+
+    return conv.participantName || 'Unknown'
+  }
+
+  const getUnreadCount = (conv) => {
+    if (!conv.unreadCounts) return 0
+    // unreadCounts is a Map of userId -> count
+    const counts = Object.values(conv.unreadCounts)
+    return counts.reduce((a, b) => a + b, 0)
+  }
+
   return (
-    <div className="flex flex-col h-full bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="flex flex-col h-full bg-white rounded-lg border border-gray-200 overflow-hidden max-w-full">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 border-b border-gray-200 shrink-0">
         <h2 className="font-semibold text-gray-900 mb-4">Messages</h2>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -96,51 +134,54 @@ export default function ChatList({ onSelectConversation, selectedId = null }) {
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
-            {filteredConversations.map((conversation) => (
+            {filteredConversations.map((conversation) => {
+              const participantName = getParticipantName(conversation)
+              const convId = conversation.conversationId || conversation._id
+              return (
               <button
-                key={conversation._id}
-                onClick={() => onSelectConversation(conversation._id)}
+                key={convId}
+                onClick={() => onSelectConversation(convId)}
                 className={`w-full p-3 text-left hover:bg-gray-50 transition ${
-                  selectedId === conversation._id ? 'bg-blue-50' : ''
+                  selectedId === convId ? 'bg-blue-50' : ''
                 }`}
               >
-                <div className="flex items-start gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   {/* Avatar */}
                   <div className="shrink-0 w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                    {getInitials(conversation.participantName)}
+                    {getInitials(participantName)}
                   </div>
 
                   {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <p className="font-medium text-gray-900 truncate">
-                        {conversation.participantName}
+                  <div className="flex-1 min-w-0 overflow-hidden">
+                    <div className="flex items-baseline justify-between gap-2 mb-1">
+                      <p className="font-medium text-gray-900 truncate text-sm">
+                        {participantName}
                       </p>
-                      <p className="text-xs text-gray-500 shrink-0">
-                        {formatTime(conversation.lastMessageTime)}
+                      <p className="text-xs text-gray-500 shrink-0 whitespace-nowrap">
+                        {formatTime(conversation.lastMessage?.timestamp || conversation.createdAt)}
                       </p>
                     </div>
                     <p className="text-sm text-gray-600 truncate">
-                      {conversation.lastMessage || 'No messages yet'}
+                      {conversation.lastMessage?.content || 'No messages yet'}
                     </p>
                   </div>
 
                   {/* Unread Badge */}
-                  {conversation.unreadCount > 0 && (
+                  {getUnreadCount(conversation) > 0 && (
                     <div className="shrink-0 bg-blue-500 text-white text-xs font-semibold w-5 h-5 rounded-full flex items-center justify-center">
-                      {conversation.unreadCount > 9 ? '9+' : conversation.unreadCount}
+                      {getUnreadCount(conversation) > 9 ? '9+' : getUnreadCount(conversation)}
                     </div>
                   )}
                 </div>
               </button>
-            ))}
+            )})}
           </div>
         )}
       </div>
 
       {/* New Chat Controls */}
-      <div className="p-4 border-t border-gray-200 bg-gray-50">
-        <div className="flex gap-2">
+      <div className="p-4 border-t border-gray-200 bg-gray-50 shrink-0">
+        <div className="flex gap-2 min-w-0">
           <input
             type="text"
             placeholder="Enter user ID to chat"
