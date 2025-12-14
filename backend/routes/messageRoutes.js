@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const User = require('../models/User');
@@ -9,7 +9,7 @@ const User = require('../models/User');
  * GET /api/messages/conversations
  * Get all conversations for the current user
  */
-router.get('/conversations', auth, async (req, res) => {
+router.get('/conversations', protect, async (req, res) => {
   try {
     const userId = req.user.id;
 
@@ -32,7 +32,7 @@ router.get('/conversations', auth, async (req, res) => {
  * GET /api/messages/:conversationId
  * Get messages for a specific conversation
  */
-router.get('/:conversationId', auth, async (req, res) => {
+router.get('/:conversationId', protect, async (req, res) => {
   try {
     const { conversationId } = req.params;
     const userId = req.user.id;
@@ -82,7 +82,7 @@ router.get('/:conversationId', auth, async (req, res) => {
  * POST /api/messages
  * Send a new message
  */
-router.post('/', auth, async (req, res) => {
+router.post('/', protect, async (req, res) => {
   try {
     const { conversationId, recipientId, content, attachments } = req.body;
     const senderId = req.user.id;
@@ -137,7 +137,7 @@ router.post('/', auth, async (req, res) => {
  * PUT /api/messages/:messageId/read
  * Mark message as read
  */
-router.put('/:messageId/read', auth, async (req, res) => {
+router.put('/:messageId/read', protect, async (req, res) => {
   try {
     const { messageId } = req.params;
     const userId = req.user.id;
@@ -166,7 +166,7 @@ router.put('/:messageId/read', auth, async (req, res) => {
  * DELETE /api/messages/:messageId
  * Delete a message (soft delete)
  */
-router.delete('/:messageId', auth, async (req, res) => {
+router.delete('/:messageId', protect, async (req, res) => {
   try {
     const { messageId } = req.params;
     const userId = req.user.id;
@@ -198,7 +198,7 @@ router.delete('/:messageId', auth, async (req, res) => {
  * POST /api/messages/conversations/start
  * Start or get a direct message conversation
  */
-router.post('/conversations/start', auth, async (req, res) => {
+router.post('/conversations/start', protect, async (req, res) => {
   try {
     const { otherUserId } = req.body;
     const userId = req.user.id;
