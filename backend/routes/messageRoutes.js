@@ -6,6 +6,66 @@ const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 
 /**
+ * POST /api/messages/conversations/start
+ * Start a new direct conversation with another user
+ */
+router.post('/conversations/start', protect, async (req, res) => {
+  try {
+    const { otherUserId } = req.body;
+    const currentUserId = req.user.id;
+
+    if (!otherUserId) {
+      return res.status(400).json({ error: 'otherUserId is required' });
+    }
+
+    // Get both users
+    const [currentUser, otherUser] = await Promise.all([
+      User.findById(currentUserId).select('name email role'),
+      User.findById(otherUserId).select('name email role'),
+    ]);
+
+    if (!otherUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Create unique conversation ID
+    const ids = [currentUserId, otherUserId].sort();
+    const conversationId = `direct-${ids[0]}-${ids[1]}`;
+
+    // Find or create conversation
+    let conversation = await Conversation.findOne({ conversationId });
+
+    if (!conversation) {
+      conversation = new Conversation({
+        conversationId,
+        type: 'direct',
+        participants: [
+          {
+            userId: currentUserId,
+            userName: currentUser.name,
+            userRole: currentUser.role,
+          },
+          {
+            userId: otherUserId,
+            userName: otherUser.name,
+            userRole: otherUser.role,
+          },
+        ],
+      });
+      await conversation.save();
+    }
+
+    // Populate before returning
+    await conversation.populate('participants.userId', 'name email role');
+
+    res.json(conversation);
+  } catch (error) {
+    console.error('Error starting conversation:', error);
+    res.status(500).json({ error: 'Failed to start conversation' });
+  }
+});
+
+/**
  * GET /api/messages/conversations
  * Get all conversations for the current user
  */
@@ -56,7 +116,7 @@ router.get('/:conversationId', protect, async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .select('senderId senderName senderRole content read readAt createdAt attachments');
+      .select('senderId senderName senderRole content read readAt createdAt attachments timestamp');
 
     // Mark messages as read if recipient
     await Message.updateMany(
@@ -71,7 +131,21 @@ router.get('/:conversationId', protect, async (req, res) => {
       }
     );
 
-    res.json(messages.reverse()); // Reverse to show oldest first
+    // Format messages with 'self' indicator for current user
+    const formattedMessages = messages.reverse().map((msg) => ({
+      _id: msg._id,
+      senderId: msg.senderId,
+      sender: msg.senderId.toString() === userId.toString() ? 'self' : 'other',
+      senderName: msg.senderName,
+      senderRole: msg.senderRole,
+      content: msg.content,
+      read: msg.read,
+      readAt: msg.readAt,
+      timestamp: msg.timestamp || msg.createdAt,
+      attachments: msg.attachments,
+    }));
+
+    res.json(formattedMessages);
   } catch (error) {
     console.error('Error fetching messages:', error);
     res.status(500).json({ error: 'Failed to fetch messages' });

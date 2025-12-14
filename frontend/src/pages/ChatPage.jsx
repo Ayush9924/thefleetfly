@@ -5,12 +5,14 @@ import ChatWindow from "../components/ChatWindow";
 import { Plus, MessageSquare, Sparkles, Zap, Users, Shield, Send, Search } from "lucide-react";
 import api from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
+import { useRealtime } from "../contexts/RealtimeContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "../components/ui/button"; // You need to create or import this
 import { Input } from "../components/ui/input"; // You need to create or import this
 
 export default function ChatPage() {
   const { user } = useAuth();
+  const { socket } = useRealtime();
   const { conversations, setConversations, startConversation, isConnected } = useSocketChat();
   const [selectedConversationId, setSelectedConversationId] = useState(null);
   const [showNewConversation, setShowNewConversation] = useState(false);
@@ -20,16 +22,36 @@ export default function ChatPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [totalMessages, setTotalMessages] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [onlineUsers, setOnlineUsers] = useState(new Set());
 
-  // Calculate unread messages and total messages
+  // Calculate unread messages (messages I SENT that others haven't read)
   useEffect(() => {
-    if (conversations.length > 0) {
-      const unread = conversations.reduce((total, conv) => total + (conv.unreadCount || 0), 0);
-      const totalMsgs = conversations.reduce((total, conv) => total + (conv.messageCount || 0), 0);
-      setUnreadCount(unread);
-      setTotalMessages(totalMsgs);
+    const fetchUnreadSentMessages = async () => {
+      try {
+        // Get all my sent messages that haven't been read
+        const allConversations = await api.get('/messages/conversations');
+        let totalUnread = 0;
+
+        for (const conv of allConversations.data) {
+          // Count unread messages in each conversation
+          const messages = await api.get(`/messages/${conv.conversationId || conv._id}`);
+          const myUnreadMessages = messages.data.filter(
+            (msg) => String(msg.senderId) === String(user?._id) && !msg.read
+          ).length;
+          totalUnread += myUnreadMessages;
+        }
+
+        setUnreadCount(totalUnread);
+        setTotalMessages(allConversations.data.length);
+      } catch (error) {
+        console.error('Error calculating unread messages:', error);
+      }
+    };
+
+    if (isConnected) {
+      fetchUnreadSentMessages();
     }
-  }, [conversations]);
+  }, [isConnected, user, conversations]);
 
   // Fetch all users by role
   useEffect(() => {
@@ -79,6 +101,33 @@ export default function ChatPage() {
       loadConversations();
     }
   }, [isConnected, setConversations]);
+
+  // Listen for online/offline events
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleUserOnline = (data) => {
+      console.log('🟢 User online:', data.userName);
+      setOnlineUsers((prev) => new Set([...prev, data.userId]));
+    };
+
+    const handleUserOffline = (data) => {
+      console.log('🔴 User offline:', data.userName);
+      setOnlineUsers((prev) => {
+        const updated = new Set(prev);
+        updated.delete(data.userId);
+        return updated;
+      });
+    };
+
+    socket.on('user:online', handleUserOnline);
+    socket.on('user:offline', handleUserOffline);
+
+    return () => {
+      socket.off('user:online', handleUserOnline);
+      socket.off('user:offline', handleUserOffline);
+    };
+  }, [socket]);
 
   const handleSelectConversation = (conversationId) => {
     setSelectedConversationId(conversationId);
@@ -164,13 +213,13 @@ export default function ChatPage() {
                     repeat: Infinity,
                     ease: "easeInOut",
                   }}
-                  className="h-16 w-16 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/40"
+                  className="h-16 w-16 bg-linear-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-500/40"
                 >
                   <MessageSquare className="h-8 w-8 text-white" />
                 </motion.div>
                 <div>
                   <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight">
-                    <span className="bg-gradient-to-r from-gray-900 via-blue-900 to-indigo-900 bg-clip-text text-transparent">
+                    <span className="bg-linear-to-r from-gray-900 via-blue-900 to-indigo-900 bg-clip-text text-transparent">
                       Messages
                     </span>
                   </h1>
@@ -188,7 +237,7 @@ export default function ChatPage() {
                     <motion.div
                       initial={{ scale: 0, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      className="inline-flex items-center gap-2 px-4 py-1.5 mt-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full text-sm font-bold shadow-lg shadow-blue-500/40"
+                      className="inline-flex items-center gap-2 px-4 py-1.5 mt-3 bg-linear-to-r from-blue-600 to-indigo-600 text-white rounded-full text-sm font-bold shadow-lg shadow-blue-500/40"
                     >
                       <Zap className="h-4 w-4" />
                       {totalMessages} New {totalMessages === 1 ? "Message" : "Messages"}
@@ -205,7 +254,7 @@ export default function ChatPage() {
                 >
                   <button
                     onClick={() => setShowNewConversation(!showNewConversation)}
-                    className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold shadow-lg shadow-blue-500/40 px-6 py-3 rounded-lg flex items-center gap-2"
+                    className="bg-linear-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold shadow-lg shadow-blue-500/40 px-6 py-3 rounded-lg flex items-center gap-2"
                   >
                     <Plus className="h-5 w-5" />
                     New Chat
@@ -236,7 +285,7 @@ export default function ChatPage() {
         >
           <motion.div
             whileHover={{ scale: 1.03, y: -5 }}
-            className="relative overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 shadow-xl shadow-blue-500/30"
+            className="relative overflow-hidden bg-linear-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 shadow-xl shadow-blue-500/30"
           >
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
             <div className="relative">
@@ -257,7 +306,7 @@ export default function ChatPage() {
 
           <motion.div
             whileHover={{ scale: 1.03, y: -5 }}
-            className="relative overflow-hidden bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-6 shadow-xl shadow-amber-500/30"
+            className="relative overflow-hidden bg-linear-to-br from-amber-500 to-orange-600 rounded-2xl p-6 shadow-xl shadow-amber-500/30"
           >
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
             <div className="relative">
@@ -265,7 +314,7 @@ export default function ChatPage() {
                 <Send className="h-8 w-8 text-white/80" />
                 <div className="h-12 w-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
                   <span className="text-2xl font-black text-white">
-                    {totalMessages}
+                    {unreadCount}
                   </span>
                 </div>
               </div>
@@ -276,7 +325,7 @@ export default function ChatPage() {
 
           <motion.div
             whileHover={{ scale: 1.03, y: -5 }}
-            className="relative overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 shadow-xl shadow-emerald-500/30"
+            className="relative overflow-hidden bg-linear-to-br from-emerald-500 to-teal-600 rounded-2xl p-6 shadow-xl shadow-emerald-500/30"
           >
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
             <div className="relative">
@@ -284,12 +333,12 @@ export default function ChatPage() {
                 <Users className="h-8 w-8 text-white/80" />
                 <div className="h-12 w-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
                   <span className="text-2xl font-black text-white">
-                    {unreadCount}
+                    {onlineUsers.size}
                   </span>
                 </div>
               </div>
               <p className="text-white/90 font-bold text-lg">Active</p>
-              <p className="text-white/70 text-sm font-medium">With updates</p>
+              <p className="text-white/70 text-sm font-medium">Users online</p>
             </div>
           </motion.div>
         </motion.div>
@@ -299,7 +348,7 @@ export default function ChatPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="grid grid-cols-1 lg:grid-cols-4 gap-6"
+          className="grid grid-cols-1 lg:grid-cols-4 gap-6 min-h-[600px]"
         >
           {/* Chat List - Sidebar */}
           <AnimatePresence>
@@ -309,11 +358,11 @@ export default function ChatPage() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                className="lg:col-span-1"
+                className="lg:col-span-1 min-w-0"
               >
-                <div className="h-[600px] overflow-hidden bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl shadow-blue-500/10 border border-white/50 flex flex-col">
+                <div className="h-[600px] overflow-hidden bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl shadow-blue-500/10 border border-white/50 flex flex-col max-w-full">
                   {/* Search Bar */}
-                  <div className="p-4 border-b border-gray-200/30 bg-gradient-to-r from-blue-50 to-indigo-50">
+                  <div className="p-4 border-b border-gray-200/30 bg-linear-to-r from-blue-50 to-indigo-50">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-blue-400" />
                       <input
@@ -373,7 +422,7 @@ export default function ChatPage() {
                         animate={{ scale: 1 }}
                         className="p-8 text-center"
                       >
-                        <div className="h-20 w-20 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <div className="h-20 w-20 bg-linear-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
                           <Users className="h-10 w-10 text-blue-400" />
                         </div>
                         <p className="text-gray-700 font-semibold text-sm">
@@ -397,7 +446,7 @@ export default function ChatPage() {
 
           {/* Chat Window */}
           <div className="lg:col-span-3">
-            <div className="h-[600px] overflow-hidden bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl shadow-blue-500/10 border border-white/50">
+            <div className="h-[600px] overflow-hidden bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl shadow-blue-500/10 border border-white/50 flex flex-col">
               {selectedConv ? (
                 <ChatWindow
                   conversationId={selectedConversationId}
@@ -420,12 +469,12 @@ export default function ChatPage() {
                       repeat: Infinity,
                       ease: "easeInOut",
                     }}
-                    className="h-32 w-32 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-3xl flex items-center justify-center mb-8 shadow-2xl shadow-blue-500/40"
+                    className="h-32 w-32 bg-linear-to-br from-blue-500 via-indigo-500 to-purple-500 rounded-3xl flex items-center justify-center mb-8 shadow-2xl shadow-blue-500/40"
                   >
                     <MessageSquare className="h-16 w-16 text-white" />
                   </motion.div>
                   <h3 className="text-2xl sm:text-3xl font-black text-gray-900 mb-3">
-                    <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                    <span className="bg-linear-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                       Welcome to Your Messaging Hub
                     </span>
                   </h3>
@@ -453,7 +502,7 @@ export default function ChatPage() {
             <motion.div
               animate={{ rotate: [0, 360] }}
               transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-              className="h-12 w-12 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center shrink-0 shadow-lg"
+              className="h-12 w-12 bg-linear-to-br from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center shrink-0 shadow-lg"
             >
               <Sparkles className="h-6 w-6 text-white" />
             </motion.div>

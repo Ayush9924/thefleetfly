@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, Trash2, MoreVertical } from 'lucide-react'
+import api from '../services/api'
 import { useSocketChat } from '../hooks/useSocketChat'
 
 /**
@@ -14,25 +15,101 @@ export default function ChatWindow({ conversationId, otherUserName = 'User' }) {
     markAsRead,
     deleteMessage,
     typingUsers,
+    loadMessages,
+    setMessages,
+    setActiveConversation,
   } = useSocketChat()
   const [inputValue, setInputValue] = useState('')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [loadingMessages, setLoadingMessages] = useState(false)
   const messagesEndRef = useRef(null)
   const typingTimeoutRef = useRef(null)
 
-  // Auto-scroll to bottom
+  // Set active conversation and load messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (!conversationId) {
+      console.warn('No conversationId provided to ChatWindow')
+      return
+    }
+
+    console.log('🔄 Setting active conversation:', conversationId)
+    
+    // Set active conversation FIRST
+    setActiveConversation(conversationId)
+
+    // Then load messages
+    const fetchMessages = async () => {
+      try {
+        setLoadingMessages(true)
+        console.log('📥 Fetching messages for:', conversationId)
+        const response = await api.get(`/messages/${conversationId}`)
+        console.log('✅ Messages loaded:', response.data?.length || 0, response.data)
+        
+        // Get current user
+        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
+        
+        // Ensure messages have proper structure with senderName
+        // Sort by timestamp to ensure chronological order (oldest first)
+        const formattedMessages = (response.data || [])
+          .map((msg) => {
+            const isSelf = String(msg.senderId) === String(currentUser._id)
+            return {
+              _id: msg._id,
+              sender: msg.senderId,
+              senderName: isSelf ? 'You' : (msg.senderName || 'Unknown'),
+              content: msg.content,
+              timestamp: msg.timestamp || msg.createdAt,
+              read: msg.read || false,
+              isOptimistic: false,
+            }
+          })
+          .sort((a, b) => {
+            // Sort by timestamp: oldest first, newest last
+            const timeA = new Date(a.timestamp).getTime()
+            const timeB = new Date(b.timestamp).getTime()
+            return timeA - timeB
+          })
+        
+        console.log('📊 Formatted messages:', formattedMessages.length)
+        setMessages(formattedMessages)
+      } catch (error) {
+        console.error('Error loading messages:', error)
+        setMessages([])
+      } finally {
+        setLoadingMessages(false)
+      }
+    }
+
+    fetchMessages()
+    
+    // Join socket room
+    loadMessages(conversationId)
+  }, [conversationId, loadMessages, setMessages, setActiveConversation])
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, 0)
   }, [messages])
 
   const handleSendMessage = (e) => {
     e.preventDefault()
 
-    if (inputValue.trim() && conversationId) {
-      sendMessage(inputValue, conversationId)
-      setInputValue('')
-      setShowEmojiPicker(false)
+    if (!inputValue.trim()) {
+      console.warn('Empty message, not sending')
+      return
     }
+
+    if (!conversationId) {
+      console.error('No conversation ID, cannot send message')
+      return
+    }
+
+    console.log('📨 Sending message:', { conversationId, content: inputValue })
+    sendMessage(inputValue, conversationId)
+    setInputValue('')
+    setShowEmojiPicker(false)
   }
 
   const handleInputChange = (e) => {
@@ -59,28 +136,51 @@ export default function ChatWindow({ conversationId, otherUserName = 'User' }) {
   }
 
   const formatTime = (timestamp) => {
-    const date = new Date(timestamp)
-    const now = new Date()
+    if (!timestamp) return 'N/A'
+    
+    try {
+      const date = new Date(timestamp)
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return 'Invalid Date'
+      }
+      
+      const now = new Date()
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const yesterday = new Date(today)
+      yesterday.setDate(yesterday.getDate() - 1)
+      const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
 
-    if (date.toDateString() === now.toDateString()) {
-      return date.toLocaleTimeString('en-US', {
+      let dateStr = ''
+      if (messageDate.getTime() === today.getTime()) {
+        dateStr = 'Today'
+      } else if (messageDate.getTime() === yesterday.getTime()) {
+        dateStr = 'Yesterday'
+      } else {
+        dateStr = date.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+        })
+      }
+
+      const timeStr = date.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
+        hour12: true,
       })
-    }
 
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
+      return `${timeStr}`
+    } catch (error) {
+      console.error('Error formatting time:', error)
+      return 'N/A'
+    }
   }
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-lg border border-gray-200">
+    <div className="flex flex-col h-full bg-white border-gray-200">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 shrink-0">
         <div>
           <h2 className="font-semibold text-gray-900">{otherUserName}</h2>
           {Object.keys(typingUsers).length > 0 && (
@@ -97,49 +197,93 @@ export default function ChatWindow({ conversationId, otherUserName = 'User' }) {
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 ? (
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {loadingMessages ? (
+          <div className="flex items-center justify-center h-full text-gray-500">
+            <p>Loading messages...</p>
+          </div>
+        ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-gray-500">
             <p>No messages yet. Start the conversation!</p>
           </div>
         ) : (
-          messages.map((message) => (
-            <div
-              key={message._id}
-              className={`flex ${
-                message.sender === 'self' ? 'justify-end' : 'justify-start'
-              } group`}
-            >
-              <div
-                className={`max-w-xs lg:max-w-md xl:max-w-lg px-4 py-2 rounded-lg ${
-                  message.sender === 'self'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-100 text-gray-900'
-                } relative`}
-              >
-                <p className="text-sm">{message.content}</p>
-                <p
-                  className={`text-xs mt-1 ${
-                    message.sender === 'self'
-                      ? 'text-blue-100'
-                      : 'text-gray-500'
-                  }`}
-                >
-                  {formatTime(message.timestamp)}
-                </p>
+          messages.map((message) => {
+            // Check if message is from current user
+            const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
+            const isSelf = message.sender === 'self' || String(message.sender) === String(currentUser._id)
+            
+            // Get initials for avatar
+            const getInitials = (name) => {
+              if (!name) return '?'
+              return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+            }
 
-                {/* Delete Button */}
-                {message.sender === 'self' && (
-                  <button
-                    onClick={() => handleDeleteMessage(message._id)}
-                    className="absolute top-2 -right-8 opacity-0 group-hover:opacity-100 transition p-1 hover:bg-red-100 rounded"
+            return (
+              <div
+                key={message._id}
+                className={`flex ${
+                  isSelf ? 'justify-end' : 'justify-start'
+                } group items-end gap-2 animate-fadeIn`}
+              >
+                {/* Avatar for received messages */}
+                {!isSelf && (
+                  <div className="w-8 h-8 rounded-full bg-linear-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                    {getInitials(message.senderName)}
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-1 max-w-xs lg:max-w-md xl:max-w-lg">
+                  {/* Sender Name - show for received messages */}
+                  {!isSelf && message.senderName && (
+                    <p className="text-xs font-semibold text-gray-600 px-1 ml-1">
+                      {message.senderName}
+                    </p>
+                  )}
+                  
+                  {/* Message Bubble */}
+                  <div
+                    className={`px-4 py-3 rounded-lg ${
+                      isSelf
+                        ? 'bg-blue-500 text-white rounded-br-none'
+                        : 'bg-gray-100 text-gray-900 rounded-bl-none'
+                    } relative wrap-break-word shadow-sm`}
                   >
-                    <Trash2 className="w-3 h-3 text-red-600" />
-                  </button>
+                    <p className="text-sm leading-relaxed">{message.content}</p>
+                    <p
+                      className={`text-xs mt-2 ${
+                        isSelf
+                          ? 'text-blue-100'
+                          : 'text-gray-500'
+                      } flex items-center gap-1`}
+                    >
+                      {formatTime(message.timestamp)}
+                      {isSelf && message.read && (
+                        <span title="Read">✓✓</span>
+                      )}
+                    </p>
+
+                    {/* Delete Button */}
+                    {isSelf && (
+                      <button
+                        onClick={() => handleDeleteMessage(message._id)}
+                        className="absolute top-2 -right-8 opacity-0 group-hover:opacity-100 transition p-1 hover:bg-red-100 rounded"
+                        title="Delete message"
+                      >
+                        <Trash2 className="w-3 h-3 text-red-600" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Avatar for sent messages (optional) */}
+                {isSelf && (
+                  <div className="w-8 h-8 rounded-full bg-linear-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                    {getInitials(currentUser?.name || 'You')}
+                  </div>
                 )}
               </div>
-            </div>
-          ))
+            )
+          })
         )}
         <div ref={messagesEndRef} />
       </div>
@@ -147,7 +291,7 @@ export default function ChatWindow({ conversationId, otherUserName = 'User' }) {
       {/* Input Area */}
       <form
         onSubmit={handleSendMessage}
-        className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg"
+        className="p-4 border-t border-gray-200 bg-white shrink-0"
       >
         <div className="flex gap-2">
           <input

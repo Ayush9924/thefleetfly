@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { login as apiLogin, register as apiRegister, getCurrentUser } from '../services/authService.jsx'
+import { disconnectSocket } from '../lib/socket.js'
 
 const AuthContext = createContext()
 
@@ -35,6 +36,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     try {
+      disconnectSocket() // Disconnect old socket before logging in as new user
       const { user, token } = await apiLogin(email, password)
       setCurrentUser(user)
       localStorage.setItem('token', token)
@@ -62,6 +64,7 @@ export function AuthProvider({ children }) {
   }, [navigate])
 
   const logout = useCallback(() => {
+    disconnectSocket()
     setCurrentUser(null)
     localStorage.removeItem('token')
     localStorage.removeItem('currentUser')

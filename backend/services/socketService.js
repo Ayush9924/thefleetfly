@@ -6,6 +6,7 @@
 // In-memory location storage (for development)
 const activeLocations = new Map(); // driverId -> { latitude, longitude, speed, heading, timestamp }
 const userSockets = new Map(); // userId -> Set of socket ids
+const onlineUsers = new Map(); // userId -> { socketId, userName, userRole, connectedAt }
 
 // Import models for persistence
 const Message = require('../models/Message');
@@ -28,6 +29,24 @@ const socketService = (io) => {
       userSockets.set(userId, new Set());
     }
     userSockets.get(userId).add(socket.id);
+
+    // Track online users
+    onlineUsers.set(userId, {
+      socketId: socket.id,
+      userName,
+      userRole,
+      connectedAt: Date.now(),
+    });
+
+    // Broadcast that user is now online
+    io.emit('user:online', {
+      userId,
+      userName,
+      userRole,
+      onlineCount: onlineUsers.size,
+    });
+
+    console.log(`🟢 Online users: ${onlineUsers.size}`);
 
     // ==================== LOCATION TRACKING EVENTS ====================
 
@@ -238,8 +257,9 @@ const socketService = (io) => {
     socket.on('chat:join_conversation', (data) => {
       try {
         const { conversationId } = data;
-        socket.join(`chat:${conversationId}`);
-        console.log(`💬 User ${userId} joined chat: ${conversationId}`);
+        const roomName = `chat:${conversationId}`;
+        socket.join(roomName);
+        console.log(`✅ User ${userId} (${socket.userName}) joined room: ${roomName}`, { socketId: socket.id });
       } catch (error) {
         console.error('❌ Error in chat:join_conversation:', error.message);
       }
@@ -276,22 +296,40 @@ const socketService = (io) => {
 
     /**
      * Send chat message
-     * Format: { conversationId, message, recipientId, senderRole }
+     * Format: { conversationId, message }
+     * Saves to DB and broadcasts to conversation room
      */
     socket.on('chat:send_message', async (data) => {
       try {
-        const { conversationId, message, recipientId, senderRole } = data;
+        const { conversationId, message } = data;
 
-        if (!conversationId || !message || !recipientId) {
-          socket.emit('error', 'Missing required fields: conversationId, message, recipientId');
+        console.log(`🔔 chat:send_message received:`, { conversationId, messageLength: message?.length, userId, socketId: socket.id });
+
+        if (!conversationId || !message) {
+          console.error('❌ Missing fields:', { conversationId, message });
+          socket.emit('error', 'Missing required fields: conversationId, message');
           return;
         }
+
+        // Get conversation to find recipient
+        const conversation = await Conversation.findOne({ conversationId });
+        if (!conversation) {
+          console.error('❌ Conversation not found:', conversationId);
+          socket.emit('error', 'Conversation not found');
+          return;
+        }
+
+        // Find recipient (the other participant)
+        const recipient = conversation.participants.find(p => String(p.userId) !== String(userId));
+        const recipientId = recipient?.userId;
+
+        console.log(`✉️  Message details:`, { senderId: userId, senderName: socket.userName, recipientId });
 
         const chatMessage = {
           conversationId,
           senderId: userId,
           senderName: socket.userName,
-          senderRole: senderRole || userRole,
+          senderRole: userRole,
           recipientId,
           content: message,
           timestamp: new Date().toISOString(),
@@ -304,22 +342,46 @@ const socketService = (io) => {
             conversationId,
             senderId: userId,
             senderName: socket.userName,
-            senderRole: senderRole || userRole,
+            senderRole: userRole,
             recipientId,
             content: message,
           });
           await msgDoc.save();
+
+          // Update conversation with last message
+          await Conversation.findOneAndUpdate(
+            { conversationId },
+            {
+              lastMessage: {
+                content: message,
+                senderId: userId,
+                timestamp: new Date(),
+              },
+            }
+          );
+
           chatMessage._id = msgDoc._id;
+          console.log(`✅ Message saved to DB:`, { messageId: msgDoc._id, conversationId });
         } catch (dbError) {
-          console.warn('⚠️  Message not saved to DB (dev mode fallback):', dbError.message);
+          console.warn('⚠️  Message not saved to DB:', dbError.message);
           // Continue anyway - message still broadcasts real-time
         }
 
-        // Broadcast to conversation room using 'message' as key
-        io.to(`chat:${conversationId}`).emit('chat:receive_message', chatMessage);
-        console.log(`💬 Message sent in conversation: ${conversationId}`);
+        // Broadcast to conversation room
+        const roomName = `chat:${conversationId}`;
+        const socketsInRoom = io.sockets.adapter.rooms.get(roomName);
+        const recipientCount = socketsInRoom ? socketsInRoom.size : 0;
+        
+        console.log(`📤 Broadcasting to room: ${roomName} (${recipientCount} recipient(s))`);
+        
+        io.to(roomName).emit('chat:receive_message', {
+          ...chatMessage,
+          message: message, // Keep both for compatibility
+        });
+
+        console.log(`💬 Message broadcast complete for conversation: ${conversationId}`);
       } catch (error) {
-        console.error('❌ Error in chat:send_message:', error.message);
+        console.error('❌ Error in chat:send_message:', error.message, error);
         socket.emit('error', `Failed to send message: ${error.message}`);
       }
     });
@@ -517,9 +579,68 @@ const socketService = (io) => {
           }
         }
 
+        // Remove from online users
+        onlineUsers.delete(userId);
+
         console.log(`❌ User disconnected: ${userName} - Socket: ${socket.id}`);
+        
+        // Broadcast that user is now offline
+        io.emit('user:offline', {
+          userId,
+          userName,
+          onlineCount: onlineUsers.size,
+        });
+
+        console.log(`🔴 Online users: ${onlineUsers.size}`);
       } catch (error) {
         console.error('❌ Error in disconnect handler:', error.message);
+      }
+    });
+
+    /**
+     * Mark all messages in a conversation as read for the current user
+     */
+    socket.on('chat:mark_conversation_read', async (data) => {
+      try {
+        const { conversationId } = data;
+        
+        if (!conversationId) {
+          console.error('❌ Missing conversationId in mark_conversation_read');
+          return;
+        }
+
+        console.log(`📖 Marking conversation as read: ${conversationId} for user ${userId}`);
+
+        // Update all unread messages in this conversation for the current user
+        await Message.updateMany(
+          {
+            conversationId,
+            senderId: { $ne: userId }, // Messages not from current user
+            read: false,
+          },
+          {
+            read: true,
+          }
+        );
+
+        // Update the conversation's unreadCounts to remove this user's count
+        await Conversation.findOneAndUpdate(
+          { conversationId },
+          {
+            $unset: { [`unreadCounts.${userId}`]: 1 },
+          }
+        );
+
+        console.log(`✅ Marked conversation ${conversationId} as read for user ${userId}`);
+
+        // Emit event to update other sockets in the room
+        const roomName = `chat:${conversationId}`;
+        io.to(roomName).emit('chat:conversation_read', {
+          conversationId,
+          userId,
+        });
+      } catch (error) {
+        console.error('❌ Error in chat:mark_conversation_read:', error.message);
       }
     });
 
