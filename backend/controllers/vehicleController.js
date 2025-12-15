@@ -15,11 +15,38 @@ const getVehicles = async (req, res) => {
 // @route   POST /api/vehicles
 const createVehicle = async (req, res) => {
   try {
+    const { plateNumber, make, model } = req.body;
+
+    // Validate required fields
+    if (!plateNumber || !make || !model) {
+      return res.status(400).json({ 
+        message: 'Plate number, make, and model are required' 
+      });
+    }
+
+    // Check if plate number already exists
+    const existingVehicle = await Vehicle.findOne({ plateNumber: plateNumber.toUpperCase() });
+    if (existingVehicle) {
+      return res.status(400).json({ 
+        message: 'A vehicle with this plate number already exists' 
+      });
+    }
+
     const vehicle = new Vehicle(req.body);
     const createdVehicle = await vehicle.save();
-    res.status(201).json(createdVehicle);
+    
+    res.status(201).json({
+      success: true,
+      message: 'Vehicle created successfully',
+      data: createdVehicle
+    });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    console.error('Error creating vehicle:', error);
+    res.status(400).json({ 
+      success: false,
+      message: error.message || 'Failed to create vehicle',
+      errors: error.errors
+    });
   }
 };
 

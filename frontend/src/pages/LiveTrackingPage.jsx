@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRealtime } from '../contexts/RealtimeContext';
 import LiveMapTracker from '../components/LiveMapTracker';
+import { vehicleService } from '../services/vehicleService';
+import { mockFleetData } from '../services/mockApi';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { 
   MapPin, Gauge, Zap, Filter, Search, Users, Clock,
@@ -16,6 +18,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export default function LiveTrackingPage() {
   const { locations = [], loading } = useRealtime();
+  const [allVehicles, setAllVehicles] = useState([]);
+  const [mockVehicles, setMockVehicles] = useState([]);
+  const [vehiclesLoading, setVehiclesLoading] = useState(true);
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [filterSpeed, setFilterSpeed] = useState(0);
   const [filterStatus, setFilterStatus] = useState('all');
@@ -25,32 +30,132 @@ export default function LiveTrackingPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [selectedVehicleType, setSelectedVehicleType] = useState('all');
 
+  // Fetch all vehicles - BOTH DATABASE AND MOCK API
+  useEffect(() => {
+    const fetchAllVehicles = async () => {
+      try {
+        setVehiclesLoading(true);
+        
+        // Fetch database vehicles
+        const dbVehicles = await vehicleService.getAllVehicles();
+        setAllVehicles(Array.isArray(dbVehicles) ? dbVehicles : []);
+        console.log('✅ Database vehicles loaded:', dbVehicles?.length || 0);
+        
+        // Fetch mock API vehicles
+        const mockData = await mockFleetData.getVehicles(15);
+        setMockVehicles(Array.isArray(mockData) ? mockData : []);
+        console.log('✅ Mock vehicles loaded:', mockData?.length || 0);
+      } catch (error) {
+        console.error('❌ Error fetching vehicles:', error);
+        setAllVehicles([]);
+        setMockVehicles([]);
+      } finally {
+        setVehiclesLoading(false);
+      }
+    };
+
+    fetchAllVehicles();
+  }, []);
+
+  // Merge ALL vehicles: DATABASE + MOCK API + REALTIME LOCATIONS
+  const mergedVehicleData = useMemo(() => {
+    const combinedVehicles = [];
+    
+    // 1. Add database vehicles (from MongoDB)
+    if (Array.isArray(allVehicles) && allVehicles.length > 0) {
+      console.log('🗄️ Processing database vehicles...');
+      allVehicles.forEach(vehicle => {
+        const locationData = Array.isArray(locations) ? 
+          locations.find(loc => loc.vehicleId === vehicle._id || loc.licensePlate === vehicle.plateNumber) 
+          : null;
+        
+        const latitude = locationData?.latitude ?? vehicle.latitude ?? 40.7128;
+        const longitude = locationData?.longitude ?? vehicle.longitude ?? -74.0060;
+        const speed = locationData?.speed ?? 0;
+        const heading = locationData?.heading ?? 0;
+        
+        combinedVehicles.push({
+          ...vehicle,
+          driverId: vehicle._id,
+          licensePlate: vehicle.plateNumber,
+          vehicleType: vehicle.make,
+          driverName: vehicle.make + ' ' + vehicle.model,
+          latitude,
+          longitude,
+          speed,
+          heading,
+          timestamp: locationData?.timestamp ?? new Date().toISOString(),
+          status: speed > 15 ? 'active' : speed > 0 ? 'idle' : 'stopped',
+          lastUpdate: new Date(locationData?.timestamp || Date.now()).toLocaleTimeString([], { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            second: '2-digit'
+          }),
+          coordinates: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+          signal: ['excellent', 'good', 'fair', 'poor'][Math.floor(Math.random() * 4)],
+          battery: vehicle.battery || Math.floor(Math.random() * 30) + 70,
+          fuel: vehicle.fuel || Math.floor(Math.random() * 40) + 60,
+          temperature: vehicle.temperature || Math.floor(Math.random() * 15) + 20,
+          currentCity: 'Unknown',
+          eta: Math.floor(Math.random() * 60) + 10,
+          source: 'database'
+        });
+      });
+    }
+    
+    // 2. Add mock API vehicles (simulated fleet data)
+    if (Array.isArray(mockVehicles) && mockVehicles.length > 0) {
+      console.log('🎭 Processing mock vehicles...');
+      mockVehicles.forEach(vehicle => {
+        combinedVehicles.push({
+          ...vehicle,
+          driverId: vehicle.driverId,
+          licensePlate: vehicle.licensePlate,
+          vehicleType: vehicle.vehicleType,
+          driverName: vehicle.driverName,
+          latitude: vehicle.latitude,
+          longitude: vehicle.longitude,
+          speed: vehicle.speed,
+          heading: vehicle.heading,
+          timestamp: vehicle.timestamp,
+          status: vehicle.speed > 15 ? 'active' : vehicle.speed > 0 ? 'idle' : 'stopped',
+          lastUpdate: new Date(vehicle.timestamp).toLocaleTimeString([], { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            second: '2-digit'
+          }),
+          coordinates: `${vehicle.latitude.toFixed(4)}, ${vehicle.longitude.toFixed(4)}`,
+          signal: vehicle.signal || ['excellent', 'good', 'fair', 'poor'][Math.floor(Math.random() * 4)],
+          battery: vehicle.battery,
+          fuel: vehicle.fuel,
+          temperature: vehicle.temperature,
+          currentCity: 'In Transit',
+          eta: Math.floor(Math.random() * 60) + 10,
+          source: 'mock'
+        });
+      });
+    }
+    
+    console.log('📊 Total combined vehicles:', combinedVehicles.length);
+    return combinedVehicles;
+  }, [allVehicles, mockVehicles, locations]);
+
   // Enhanced vehicle data
   const enhancedLocations = useMemo(() => {
-    if (!Array.isArray(locations)) return [];
-    return locations.map(loc => ({
-      ...loc,
-      status: loc.speed > 15 ? 'active' : loc.speed > 0 ? 'idle' : 'stopped',
-      lastUpdate: new Date(loc.timestamp).toLocaleTimeString([], { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        second: '2-digit'
-      }),
-      coordinates: `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`,
-      signal: ['excellent', 'good', 'fair', 'poor'][Math.floor(Math.random() * 4)],
-    }));
-  }, [locations]);
+    if (!Array.isArray(mergedVehicleData)) return [];
+    return mergedVehicleData;
+  }, [mergedVehicleData]);
 
   // Filter logic
   const filteredLocations = useMemo(() => {
     return enhancedLocations.filter(loc => {
-      const matchesSpeed = loc.speed >= filterSpeed;
+      const matchesSpeed = (loc.speed || 0) >= filterSpeed;
       const matchesStatus = filterStatus === 'all' || loc.status === filterStatus;
       const matchesSearch = 
-        loc.driverId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        loc.licensePlate?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        loc.vehicleType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        loc.driverName?.toLowerCase().includes(searchTerm.toLowerCase());
+        (loc.driverId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (loc.licensePlate || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (loc.vehicleType || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (loc.driverName || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesVehicleType = selectedVehicleType === 'all' || loc.vehicleType === selectedVehicleType;
       
       return matchesSpeed && matchesStatus && matchesSearch && matchesVehicleType;
@@ -66,7 +171,7 @@ export default function LiveTrackingPage() {
     const stopped = filteredLocations.filter(l => l.status === 'stopped').length;
     const total = filteredLocations.length;
     const averageSpeed = total > 0 
-      ? filteredLocations.reduce((sum, loc) => sum + loc.speed, 0) / total 
+      ? filteredLocations.reduce((sum, loc) => sum + (loc.speed || 0), 0) / total 
       : 0;
     
     return { active, idle, stopped, total, averageSpeed };
@@ -103,8 +208,14 @@ export default function LiveTrackingPage() {
     return colors[signal] || colors.fair;
   };
 
-  // Vehicle types
-  const vehicleTypes = ['all', 'Truck', 'Van', 'Car'];
+  // Vehicle types - get unique types from all vehicles
+  const vehicleTypes = useMemo(() => {
+    const types = new Set(['all']);
+    enhancedLocations.forEach(v => {
+      if (v.vehicleType) types.add(v.vehicleType);
+    });
+    return Array.from(types);
+  }, [enhancedLocations]);
 
   // Auto-select first vehicle
   useEffect(() => {
@@ -113,7 +224,7 @@ export default function LiveTrackingPage() {
     }
   }, [filteredLocations, selectedDriver]);
 
-  if (loading && enhancedLocations.length === 0) {
+  if ((loading || vehiclesLoading) && enhancedLocations.length === 0) {
     return (
       <div className="min-h-screen bg-linear-to-br from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center">
         <div className="text-center">
@@ -122,7 +233,7 @@ export default function LiveTrackingPage() {
             <Navigation className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-6 w-6 text-blue-400" />
           </div>
           <p className="mt-4 text-gray-300 text-lg font-medium">Initializing Fleet System</p>
-          <p className="mt-2 text-gray-500 text-sm">Loading real-time vehicle data...</p>
+          <p className="mt-2 text-gray-500 text-sm">Loading all vehicles and real-time data...</p>
         </div>
       </div>
     );
@@ -467,7 +578,7 @@ export default function LiveTrackingPage() {
                           {selectedData.speed.toFixed(1)} <span className="text-sm text-gray-400">km/h</span>
                         </span>
                       </div>
-                        <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+                          <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
                         <div 
                           className="h-full bg-linear-to-r from-blue-500 to-cyan-400 rounded-full"
                           style={{ width: `${Math.min((selectedData.speed / 120) * 100, 100)}%` }}
@@ -726,7 +837,7 @@ export default function LiveTrackingPage() {
               ) : (
                 <div className="text-center py-12">
                   <div className="bg-linear-to-br from-gray-900/50 to-gray-900/30 p-8 rounded-2xl max-w-md mx-auto border border-gray-800">
-                  <div className="w-16 h-16 bg-linear-to-br from-gray-800 to-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <div className="w-16 h-16 bg-linear-to-br from-gray-800 to-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-4">
                       <AlertTriangle className="h-8 w-8 text-gray-600" />
                     </div>
                     <h3 className="text-lg font-semibold text-white mb-2">No vehicles found</h3>
