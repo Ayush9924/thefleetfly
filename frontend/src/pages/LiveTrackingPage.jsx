@@ -217,12 +217,17 @@ export default function LiveTrackingPage() {
     return Array.from(types);
   }, [enhancedLocations]);
 
-  // Auto-select first vehicle
+  // detect whether user has any filters/search active
+  const filtersActive = useMemo(() => {
+    return filterSpeed > 0 || filterStatus !== 'all' || searchTerm.trim() !== '' || selectedVehicleType !== 'all';
+  }, [filterSpeed, filterStatus, searchTerm, selectedVehicleType]);
+  
+  // Auto-select first vehicle only when a filter/search is active
   useEffect(() => {
-    if (filteredLocations.length > 0 && !selectedDriver) {
+    if (filtersActive && filteredLocations.length > 0 && !selectedDriver) {
       setSelectedDriver(filteredLocations[0].driverId);
     }
-  }, [filteredLocations, selectedDriver]);
+  }, [filteredLocations, selectedDriver, filtersActive]);
 
   if ((loading || vehiclesLoading) && enhancedLocations.length === 0) {
     return (
@@ -713,6 +718,7 @@ export default function LiveTrackingPage() {
                       setFilterSpeed(0);
                       setFilterStatus('all');
                       setSelectedVehicleType('all');
+                      setSelectedDriver(null);
                     }}
                     className="text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg"
                   >
@@ -853,6 +859,7 @@ export default function LiveTrackingPage() {
                         setFilterSpeed(0);
                         setFilterStatus('all');
                         setSelectedVehicleType('all');
+                        setSelectedDriver(null);
                       }}
                     >
                       Reset All Filters

@@ -7,6 +7,7 @@ const errorHandler = require('./middleware/error');
 const cors = require('cors');
 const path = require('path');
 const morgan = require('morgan');
+const fs = require('fs');
 
 // Connect to database
 connectDB();
@@ -93,6 +94,22 @@ app.use('/api/messages', require('./routes/messageRoutes'));
 // Serve static files (for uploaded images)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Serve frontend build (Vite -> dist, CRA -> build) when present
+const viteDist = path.join(__dirname, '..', 'frontend', 'dist');
+const craBuild = path.join(__dirname, '..', 'frontend', 'build');
+
+if (fs.existsSync(viteDist)) {
+  app.use(express.static(viteDist));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(viteDist, 'index.html'));
+  });
+} else if (fs.existsSync(craBuild)) {
+  app.use(express.static(craBuild));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(craBuild, 'index.html'));
+  });
+}
+
 // Socket.io Authentication & Event Handler Setup
 const socketAuth = require('./middleware/socketAuth');
 const socketService = require('./services/socketService');
@@ -112,11 +129,19 @@ initializeMaintenanceCrons();
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
-// Start server
+// Use env PORT or 5000
 const PORT = process.env.PORT || 5001;
-server.listen(PORT, () => {
-  console.log(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-  console.log(`📍 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+const serverInstance = server.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
+});
+
+serverInstance.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Set PORT in .env or free the port.`);
+    process.exit(1);
+  } else {
+    throw err;
+  }
 });
 
 // Export for potential use in services and testing
