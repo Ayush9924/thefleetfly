@@ -447,7 +447,7 @@ export default function DashboardPage() {
               Real-Time Features
             </h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* Card 1: Live Tracking */}
             <Link to="/dashboard/tracking" className="no-underline">
               <motion.div
@@ -505,7 +505,35 @@ export default function DashboardPage() {
               </motion.div>
             </Link>
 
-            {/* Card 3: Notifications */}
+            {/* Card 3: Maintenance */}
+            <Link to="/dashboard/maintenance" className="no-underline">
+              <motion.div
+                whileHover={{ scale: 1.03, y: -5 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Card className="h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
+                  <div className="absolute inset-0 bg-linear-to-br from-orange-500/10 to-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <CardHeader className="pb-3 relative z-10">
+                    <CardTitle className="flex items-center gap-3 text-lg font-bold">
+                      <div className="bg-linear-to-br from-orange-500 to-red-600 p-2.5 rounded-xl">
+                        <Wrench className="h-5 w-5 text-white" />
+                      </div>
+                      Maintenance
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="relative z-10">
+                    <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                      Schedule and track vehicle maintenance tasks and repairs
+                    </p>
+                    <div className="flex items-center text-orange-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
+                      Manage Maintenance <ChevronRight className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </Link>
+
+            {/* Card 4: Notifications */}
             <Link to="/dashboard/notifications" className="no-underline">
               <motion.div
                 whileHover={{ scale: 1.03, y: -5 }}
@@ -528,6 +556,34 @@ export default function DashboardPage() {
                     </p>
                     <div className="flex items-center text-amber-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
                       View Alerts <ChevronRight className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </Link>
+
+            {/* Card 5: Vehicles */}
+            <Link to="/dashboard/vehicles" className="no-underline">
+              <motion.div
+                whileHover={{ scale: 1.03, y: -5 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Card className="h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
+                  <div className="absolute inset-0 bg-linear-to-br from-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <CardHeader className="pb-3 relative z-10">
+                    <CardTitle className="flex items-center gap-3 text-lg font-bold">
+                      <div className="bg-linear-to-br from-purple-500 to-pink-600 p-2.5 rounded-xl">
+                        <Truck className="h-5 w-5 text-white" />
+                      </div>
+                      Vehicles
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="relative z-10">
+                    <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                      Manage fleet vehicles with location tracking and details
+                    </p>
+                    <div className="flex items-center text-purple-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
+                      View Fleet <ChevronRight className="h-4 w-4" />
                     </div>
                   </CardContent>
                 </Card>

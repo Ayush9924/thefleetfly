@@ -105,6 +105,10 @@ socketService(io);
 
 console.log('✅ Socket.io authentication and services initialized');
 
+// Initialize maintenance background jobs
+const { initializeMaintenanceCrons } = require('./services/maintenanceCron');
+initializeMaintenanceCrons();
+
 // Error handling middleware (must be last)
 app.use(errorHandler);
 

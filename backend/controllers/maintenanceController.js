@@ -1,6 +1,9 @@
 const Maintenance = require('../models/Maintenance');
 const Vehicle = require('../models/Vehicle');
 const upload = require('../middleware/upload');
+const maintenanceScheduler = require('../services/maintenanceScheduler');
+const path = require('path');
+const fs = require('fs');
 
 // @desc    Get all maintenance records
 // @route   GET /api/maintenance
@@ -127,9 +130,122 @@ const updateMaintenance = async (req, res) => {
   }
 };
 
+// @desc    Create scheduled maintenance
+// @route   POST /api/maintenance/schedule
+const createScheduledMaintenance = async (req, res) => {
+  try {
+    const maintenance = await maintenanceScheduler.createScheduledMaintenance(req.body);
+    res.status(201).json(maintenance);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// @desc    Get upcoming scheduled maintenance
+// @route   GET /api/maintenance/scheduled/upcoming
+const getUpcomingScheduled = async (req, res) => {
+  try {
+    const daysAhead = req.query.days ? parseInt(req.query.days) : 30;
+    const maintenance = await maintenanceScheduler.getUpcomingScheduledMaintenance(daysAhead);
+    res.json(maintenance);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get overdue scheduled maintenance
+// @route   GET /api/maintenance/scheduled/overdue
+const getOverdueScheduled = async (req, res) => {
+  try {
+    const maintenance = await maintenanceScheduler.getOverdueScheduledMaintenance();
+    res.json(maintenance);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Complete a scheduled maintenance
+// @route   PUT /api/maintenance/schedule/:id/complete
+const completeScheduled = async (req, res) => {
+  try {
+    const maintenance = await maintenanceScheduler.completeScheduledMaintenance(
+      req.params.id,
+      req.body
+    );
+    res.json(maintenance);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// @desc    Update scheduled maintenance
+// @route   PUT /api/maintenance/schedule/:id
+const updateScheduled = async (req, res) => {
+  try {
+    const maintenance = await maintenanceScheduler.updateScheduledMaintenance(
+      req.params.id,
+      req.body
+    );
+    res.json(maintenance);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// @desc    Cancel scheduled maintenance
+// @route   PUT /api/maintenance/schedule/:id/cancel
+const cancelScheduled = async (req, res) => {
+  try {
+    const maintenance = await maintenanceScheduler.cancelScheduledMaintenance(
+      req.params.id,
+      req.body.reason || ''
+    );
+    res.json(maintenance);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// @desc    Get maintenance statistics
+// @route   GET /api/maintenance/stats
+const getMaintenanceStats = async (req, res) => {
+  try {
+    const vehicleId = req.query.vehicleId || null;
+    const stats = await maintenanceScheduler.getMaintenanceStats(vehicleId);
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get maintenance schedule for vehicle
+// @route   GET /api/maintenance/vehicle/:vehicleId/schedule
+const getVehicleSchedule = async (req, res) => {
+  try {
+    const schedule = await Maintenance.find({
+      vehicle: req.params.vehicleId,
+      isScheduled: true,
+      status: { $in: ['scheduled', 'pending'] }
+    })
+    .sort({ nextScheduledDate: 1 });
+    
+    res.json(schedule);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getMaintenance,
   getUpcomingMaintenance,
   createMaintenance: [upload.single('invoiceImage'), createMaintenance],
-  updateMaintenance: [upload.single('invoiceImage'), updateMaintenance]
+  updateMaintenance: [upload.single('invoiceImage'), updateMaintenance],
+  createScheduledMaintenance,
+  getUpcomingScheduled,
+  getOverdueScheduled,
+  completeScheduled,
+  updateScheduled,
+  cancelScheduled,
+  getMaintenanceStats,
+  getVehicleSchedule
 };
