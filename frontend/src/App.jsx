@@ -5,6 +5,7 @@ import Layout from './components/layout/Layout.jsx'
 import ProtectedRoute from './components/layout/ProtectedRoute.jsx'
 import PublicRoute from './components/layout/PublicRoute.jsx'
 import TestMap from './pages/TestMap'
+import PublicLiveTracking from './pages/PublicLiveTracking'
 
 // Lazy load pages for better performance
 const LandingPage = lazy(() => import('./pages/LandingPage'))
@@ -41,6 +42,10 @@ function App() {
           <PublicRoute>
             <TestMap />
           </PublicRoute>
+        } />
+
+        <Route path="/live-tracking" element={
+          <PublicLiveTracking />
         } />
         
         <Route path="/login" element={
