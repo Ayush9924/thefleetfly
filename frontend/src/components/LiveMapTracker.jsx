@@ -23,13 +23,108 @@ export default function LiveMapTracker({ drivers = [], vehicles = [], onDriverCl
   const [error, setError] = useState(null);
   const [mapStyle, setMapStyle] = useState('dark');
 
-  // prevent automatic fitBounds after the user manually interacts (zoom/pan)
+  // Route planning state (place names -> geocoding to coords)
+  const [routeOpen, setRouteOpen] = useState(false);
+  const [origin, setOrigin] = useState({ name: '' });
+  const [destination, setDestination] = useState({ name: '' });
+  const [fuelConsumption, setFuelConsumption] = useState(8); // L/100km default
+  const [fuelPrice, setFuelPrice] = useState(1.2); // price per L default
+  const [routeInfo, setRouteInfo] = useState(null);
+  const planningLayer = useRef(null);
+  // refs used by computeRoute / map updates — declare before computeRoute to avoid "access before initialization"
   const userInteracted = useRef(false);
-  // track whether initial automatic fit was already applied
   const initialFitDone = useRef(false);
-
-  // stable ref for the interaction handler so cleanup can access the same function
   const interactionHandlerRef = useRef(null);
+  // (map-click pick removed — using place names / geocoding)
+ 
+  // helper: geocode place name using Nominatim
+  const geocode = async (query) => {
+    if (!query || !String(query).trim()) return null;
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(String(query))}&format=json&limit=1`;
+      // Do not send a "User-Agent" header from browser (forbidden). Use a plain fetch.
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (!Array.isArray(json) || json.length === 0) return null;
+      return { lat: parseFloat(json[0].lat), lng: parseFloat(json[0].lon), display_name: json[0].display_name };
+    } catch (e) {
+      console.warn('Geocode error', e);
+      return null;
+    }
+  };
+ 
+  const haversineKm = (a, b) => {
+    const toRad = v => (v * Math.PI) / 180;
+    const R = 6371; // km
+    const dLat = toRad(b.lat - a.lat);
+    const dLon = toRad(b.lng - a.lng);
+    const la = toRad(a.lat);
+    const lb = toRad(b.lat);
+    const sinDlat = Math.sin(dLat / 2);
+    const sinDlon = Math.sin(dLon / 2);
+    const aa = sinDlat * sinDlat + Math.cos(la) * Math.cos(lb) * sinDlon * sinDlon;
+    const c = 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1 - aa));
+    return R * c;
+  };
+
+  const clearPlanning = () => {
+    try {
+      if (planningLayer.current && map.current) {
+        map.current.removeLayer(planningLayer.current);
+      }
+    } catch (e) {}
+    planningLayer.current = null;
+    setRouteInfo(null);
+  };
+
+  const computeRoute = async () => {
+    try {
+      clearPlanning();
+      setRouteInfo({ loading: true });
+      if (!map.current) {
+        setRouteInfo({ error: 'Map not ready' });
+        return;
+      }
+      const oGeo = await geocode(origin.name);
+      const dGeo = await geocode(destination.name);
+      if (!oGeo || !dGeo) {
+        setRouteInfo({ error: 'Could not geocode origin or destination. Try a different place name.' });
+        return;
+      }
+
+      // NOTE: This implementation uses straight-line (great-circle) distance.
+      // For production optimized routing use an external routing API (OSRM / Mapbox / GraphHopper).
+      const distanceKm = haversineKm({ lat: oGeo.lat, lng: oGeo.lng }, { lat: dGeo.lat, lng: dGeo.lng });
+      const fuelNeeded = (distanceKm * (fuelConsumption / 100));
+      const cost = fuelNeeded * fuelPrice;
+
+      // Draw simple route line + markers
+      const latlngs = [[oGeo.lat, oGeo.lng], [dGeo.lat, dGeo.lng]];
+      const line = L.polyline(latlngs, { color: '#2563eb', weight: 4, opacity: 0.9 });
+      const mo = L.marker([oGeo.lat, oGeo.lng]).bindPopup(`Origin: ${oGeo.display_name}`).addTo(map.current);
+      const md = L.marker([dGeo.lat, dGeo.lng]).bindPopup(`Destination: ${dGeo.display_name}`).addTo(map.current);
+      planningLayer.current = L.layerGroup([line, mo, md]).addTo(map.current);
+      map.current.fitBounds(line.getBounds(), { padding: [40, 40] });
+
+      setRouteInfo({
+        distanceKm,
+        fuelNeeded,
+        cost,
+        originName: oGeo.display_name,
+        destinationName: dGeo.display_name
+      });
+      // consider this a user action
+      userInteracted.current = true;
+    } catch (err) {
+      console.error('computeRoute error', err);
+      setRouteInfo({ error: 'Unexpected error while calculating route' });
+    }
+  };
+ 
+  // prevent automatic fitBounds after the user manually interacts (zoom/pan)
+  // track whether initial automatic fit was already applied
+  // stable ref for the interaction handler so cleanup can access the same function
 
   // prefer `vehicles` prop when parent passes it (LiveTrackingPage uses `vehicles`)
   const data = (Array.isArray(vehicles) && vehicles.length > 0) ? vehicles : drivers;
@@ -449,8 +544,83 @@ export default function LiveMapTracker({ drivers = [], vehicles = [], onDriverCl
           </div>
           <div className="h-4 w-px bg-gray-700"></div>
           <span className="text-sm font-medium text-gray-300">{data.length} vehicles</span>
+          {/* Route Planning launcher */}
+          <button
+            onClick={() => setRouteOpen(v => !v)}
+            className="ml-3 px-2 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700"
+            title="Route Planning"
+          >
+            Route Planning
+          </button>
         </div>
       </div>
+
+      {/* Route Planning Panel */}
+      {routeOpen && (
+        <div className="absolute top-20 left-4 z-999 w-[360px] max-w-full bg-gray-900/95 rounded-lg border border-gray-800 p-4 shadow-xl">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-semibold text-white">Route Planning</h4>
+            <button onClick={() => { setRouteOpen(false); clearPlanning(); }} className="text-gray-400 text-xs">Close</button>
+          </div>
+          <div className="space-y-2 text-xs text-gray-300">
+            <label className="block">
+              Origin (place name)
+              <div className="mt-1">
+                <input
+                  value={origin.name}
+                  onChange={e => setOrigin({ name: e.target.value })}
+                  placeholder="e.g. Mumbai, Gateway of India"
+                  className="w-full px-2 py-1 bg-gray-800 rounded"
+                />
+              </div>
+              <div className="mt-1 text-xs text-gray-400">You can type any place name or address — the app will geocode it.</div>
+            </label>
+            <label className="block">
+              Destination (place name)
+              <div className="mt-1">
+                <input
+                  value={destination.name}
+                  onChange={e => setDestination({ name: e.target.value })}
+                  placeholder="e.g. Pune, Shaniwar Wada"
+                  className="w-full px-2 py-1 bg-gray-800 rounded"
+                />
+              </div>
+            </label>
+             <div className="flex gap-2">
+               <label className="flex-1 block text-xs text-gray-300">Fuel (L/100km)
+                 <input type="number" value={fuelConsumption} onChange={e => setFuelConsumption(parseFloat(e.target.value)||0)} className="w-full mt-1 px-2 py-1 bg-gray-800 rounded text-sm" />
+               </label>
+               <label className="flex-1 block text-xs text-gray-300">Fuel Price (per L)
+                 <input type="number" value={fuelPrice} onChange={e => setFuelPrice(parseFloat(e.target.value)||0)} className="w-full mt-1 px-2 py-1 bg-gray-800 rounded text-sm" />
+               </label>
+             </div>
+             <div className="flex gap-2 mt-2">
+               <button onClick={computeRoute} className="flex-1 px-3 py-2 bg-blue-600 rounded text-sm">Calculate</button>
+               <button onClick={() => { setOrigin({name:''}); setDestination({name:''}); clearPlanning(); }} className="flex-1 px-3 py-2 bg-gray-700 rounded text-sm">Clear</button>
+             </div>
+             <div className="mt-2 text-xs text-gray-300">
+              {routeInfo ? (
+                routeInfo.loading ? (
+                  <div className="text-gray-300">Calculating…</div>
+                ) : routeInfo.error ? (
+                  <div className="text-red-400">{routeInfo.error}</div>
+                ) : (
+                  <div>
+                    <div>From: <strong>{routeInfo.originName || origin.name}</strong></div>
+                    <div>To: <strong>{routeInfo.destinationName || destination.name}</strong></div>
+                    <div className="mt-1">Distance: <strong>{(routeInfo.distanceKm ?? 0).toFixed(2)} km</strong></div>
+                    <div>Estimated fuel: <strong>{(routeInfo.fuelNeeded ?? 0).toFixed(2)} L</strong></div>
+                    <div>Estimated cost: <strong>₹{(routeInfo.cost ?? 0).toFixed(2)}</strong></div>
+                    <div className="mt-1 text-gray-400 text-[11px]">Note: straight-line distance used for estimation. For detailed turn-by-turn optimized routes integrate a routing API (OSRM/Mapbox/GraphHopper).</div>
+                  </div>
+                )
+              ) : (
+                <div className="text-gray-400">Enter origin & destination place names and click Calculate.</div>
+              )}
+             </div>
+           </div>
+         </div>
+       )}
     </div>
   );
 }
