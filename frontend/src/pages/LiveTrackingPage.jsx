@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRealtime } from '../contexts/RealtimeContext';
 import LiveMapTracker from '../components/LiveMapTracker';
 import { vehicleService } from '../services/vehicleService';
-import { mockFleetData } from '../services/mockApi';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { 
   MapPin, Gauge, Zap, Filter, Search, Users, Clock,
@@ -19,8 +18,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function LiveTrackingPage() {
   const { locations = [], loading } = useRealtime();
   const [allVehicles, setAllVehicles] = useState([]);
-  const [mockVehicles, setMockVehicles] = useState([]);
-  const [vehiclesLoading, setVehiclesLoading] = useState(true);
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [filterSpeed, setFilterSpeed] = useState(0);
   const [filterStatus, setFilterStatus] = useState('all');
@@ -30,83 +27,38 @@ export default function LiveTrackingPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [selectedVehicleType, setSelectedVehicleType] = useState('all');
 
-  // Fetch all vehicles - BOTH DATABASE AND MOCK API
+  // Fetch database vehicles (optional - complements mock API)
   useEffect(() => {
-    const fetchAllVehicles = async () => {
+    const fetchDatabaseVehicles = async () => {
       try {
-        setVehiclesLoading(true);
-        
-        // Fetch database vehicles
         const dbVehicles = await vehicleService.getAllVehicles();
         setAllVehicles(Array.isArray(dbVehicles) ? dbVehicles : []);
         console.log('✅ Database vehicles loaded:', dbVehicles?.length || 0);
-        
-        // Fetch mock API vehicles
-        const mockData = await mockFleetData.getVehicles(15);
-        setMockVehicles(Array.isArray(mockData) ? mockData : []);
-        console.log('✅ Mock vehicles loaded:', mockData?.length || 0);
       } catch (error) {
-        console.error('❌ Error fetching vehicles:', error);
+        console.error('❌ Error fetching database vehicles:', error);
         setAllVehicles([]);
-        setMockVehicles([]);
-      } finally {
-        setVehiclesLoading(false);
       }
     };
 
-    fetchAllVehicles();
+    fetchDatabaseVehicles();
+    
+    // Auto-refresh database vehicles every 10 seconds
+    const interval = setInterval(() => {
+      console.log('🔄 Auto-refreshing database vehicles...');
+      fetchDatabaseVehicles();
+    }, 10000);
+    
+    return () => clearInterval(interval);
   }, []);
 
-  // Merge ALL vehicles: DATABASE + MOCK API + REALTIME LOCATIONS
+  // Merge vehicles: REALTIME LOCATIONS (mock API) + DATABASE VEHICLES
   const mergedVehicleData = useMemo(() => {
     const combinedVehicles = [];
     
-    // 1. Add database vehicles (from MongoDB)
-    if (Array.isArray(allVehicles) && allVehicles.length > 0) {
-      console.log('🗄️ Processing database vehicles...');
-      allVehicles.forEach(vehicle => {
-        const locationData = Array.isArray(locations) ? 
-          locations.find(loc => loc.vehicleId === vehicle._id || loc.licensePlate === vehicle.plateNumber) 
-          : null;
-        
-        const latitude = locationData?.latitude ?? vehicle.latitude ?? 40.7128;
-        const longitude = locationData?.longitude ?? vehicle.longitude ?? -74.0060;
-        const speed = locationData?.speed ?? 0;
-        const heading = locationData?.heading ?? 0;
-        
-        combinedVehicles.push({
-          ...vehicle,
-          driverId: vehicle._id,
-          licensePlate: vehicle.plateNumber,
-          vehicleType: vehicle.make,
-          driverName: vehicle.make + ' ' + vehicle.model,
-          latitude,
-          longitude,
-          speed,
-          heading,
-          timestamp: locationData?.timestamp ?? new Date().toISOString(),
-          status: speed > 15 ? 'active' : speed > 0 ? 'idle' : 'stopped',
-          lastUpdate: new Date(locationData?.timestamp || Date.now()).toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            second: '2-digit'
-          }),
-          coordinates: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-          signal: ['excellent', 'good', 'fair', 'poor'][Math.floor(Math.random() * 4)],
-          battery: vehicle.battery || Math.floor(Math.random() * 30) + 70,
-          fuel: vehicle.fuel || Math.floor(Math.random() * 40) + 60,
-          temperature: vehicle.temperature || Math.floor(Math.random() * 15) + 20,
-          currentCity: 'Unknown',
-          eta: Math.floor(Math.random() * 60) + 10,
-          source: 'database'
-        });
-      });
-    }
-    
-    // 2. Add mock API vehicles (simulated fleet data)
-    if (Array.isArray(mockVehicles) && mockVehicles.length > 0) {
-      console.log('🎭 Processing mock vehicles...');
-      mockVehicles.forEach(vehicle => {
+    // 1. Primary: Use mock API vehicles from RealtimeContext (already updated in real-time)
+    if (Array.isArray(locations) && locations.length > 0) {
+      console.log('🎭 Processing real-time mock API vehicles:', locations.length);
+      locations.forEach(vehicle => {
         combinedVehicles.push({
           ...vehicle,
           driverId: vehicle.driverId,
@@ -126,19 +78,52 @@ export default function LiveTrackingPage() {
           }),
           coordinates: `${vehicle.latitude.toFixed(4)}, ${vehicle.longitude.toFixed(4)}`,
           signal: vehicle.signal || ['excellent', 'good', 'fair', 'poor'][Math.floor(Math.random() * 4)],
-          battery: vehicle.battery,
-          fuel: vehicle.fuel,
-          temperature: vehicle.temperature,
+          battery: vehicle.battery || 85,
+          fuel: vehicle.fuel || 75,
+          temperature: vehicle.temperature || 22,
           currentCity: 'In Transit',
           eta: Math.floor(Math.random() * 60) + 10,
-          source: 'mock'
+          source: 'mock_api'
         });
       });
     }
     
-    console.log('📊 Total combined vehicles:', combinedVehicles.length);
+    // 2. Fallback: Add database vehicles if no mock API data
+    if (Array.isArray(allVehicles) && allVehicles.length > 0) {
+      console.log('🗄️ Processing database vehicles:', allVehicles.length);
+      allVehicles.forEach(vehicle => {
+        combinedVehicles.push({
+          _id: vehicle._id,
+          driverId: vehicle._id,
+          licensePlate: vehicle.plateNumber,
+          vehicleType: vehicle.make,
+          driverName: vehicle.make + ' ' + vehicle.model,
+          latitude: vehicle.latitude ?? 40.7128,
+          longitude: vehicle.longitude ?? -74.0060,
+          speed: 0,
+          heading: 0,
+          timestamp: new Date().toISOString(),
+          status: 'stopped',
+          lastUpdate: new Date().toLocaleTimeString([], { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            second: '2-digit'
+          }),
+          coordinates: `${(vehicle.latitude ?? 40.7128).toFixed(4)}, ${(vehicle.longitude ?? -74.0060).toFixed(4)}`,
+          signal: 'good',
+          battery: vehicle.battery || 85,
+          fuel: vehicle.fuel || 75,
+          temperature: vehicle.temperature || 22,
+          currentCity: 'Unknown',
+          eta: 0,
+          source: 'database'
+        });
+      });
+    }
+    
+    console.log('📊 Total combined vehicles:', combinedVehicles.length, '(Mock:', locations.length, '+ DB:', allVehicles.length + ')');
     return combinedVehicles;
-  }, [allVehicles, mockVehicles, locations]);
+  }, [locations, allVehicles]);
 
   // Enhanced vehicle data
   const enhancedLocations = useMemo(() => {
@@ -229,7 +214,7 @@ export default function LiveTrackingPage() {
     }
   }, [filteredLocations, selectedDriver, filtersActive]);
 
-  if ((loading || vehiclesLoading) && enhancedLocations.length === 0) {
+  if (loading && enhancedLocations.length === 0) {
     return (
       <div className="min-h-screen bg-linear-to-br from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center">
         <div className="text-center">

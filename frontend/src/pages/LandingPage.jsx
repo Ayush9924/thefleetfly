@@ -410,7 +410,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 mb-12">
             <div className="lg:col-span-2">
               <div className="text-2xl font-bold bg-linear-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent mb-4">
-                Fleet<span className="text-white">Pro</span>
+                Fleet<span className="text-white">Fly</span>
               </div>
               <p className="text-gray-400 mb-6 max-w-md">
                 The ultimate fleet management solution for modern businesses.
