@@ -569,7 +569,7 @@ export default function LiveMapTracker({ drivers = [], vehicles = [], onDriverCl
                 <input
                   value={origin.name}
                   onChange={e => setOrigin({ name: e.target.value })}
-                  placeholder="e.g. Mumbai, Gateway of India"
+                  placeholder="e.g. Irvington, Chicago"
                   className="w-full px-2 py-1 bg-gray-800 rounded"
                 />
               </div>
@@ -581,7 +581,7 @@ export default function LiveMapTracker({ drivers = [], vehicles = [], onDriverCl
                 <input
                   value={destination.name}
                   onChange={e => setDestination({ name: e.target.value })}
-                  placeholder="e.g. Pune, Shaniwar Wada"
+                  placeholder="e.g. Washington, New York"
                   className="w-full px-2 py-1 bg-gray-800 rounded"
                 />
               </div>
@@ -611,7 +611,6 @@ export default function LiveMapTracker({ drivers = [], vehicles = [], onDriverCl
                     <div className="mt-1">Distance: <strong>{(routeInfo.distanceKm ?? 0).toFixed(2)} km</strong></div>
                     <div>Estimated fuel: <strong>{(routeInfo.fuelNeeded ?? 0).toFixed(2)} L</strong></div>
                     <div>Estimated cost: <strong>₹{(routeInfo.cost ?? 0).toFixed(2)}</strong></div>
-                    <div className="mt-1 text-gray-400 text-[11px]">Note: straight-line distance used for estimation. For detailed turn-by-turn optimized routes integrate a routing API (OSRM/Mapbox/GraphHopper).</div>
                   </div>
                 )
               ) : (
