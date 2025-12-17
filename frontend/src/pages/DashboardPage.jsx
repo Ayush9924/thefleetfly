@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, Link } from "react-router-dom";
 import {
@@ -42,6 +42,7 @@ import {
   Sparkles,
   TrendingUp,
   LayoutDashboard,
+  ChevronLeft,
 } from "lucide-react";
 import { format, subDays, startOfWeek, endOfWeek } from "date-fns";
 import { Button } from "../components/ui/button";
@@ -98,9 +99,24 @@ export default function DashboardPage() {
   const [maintenanceData, setMaintenanceData] = useState([]);
   const [vehicleStatusData, setVehicleStatusData] = useState([]);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [scrollPosition, setScrollPosition] = useState(0);
+  const scrollContainerRef = useRef(null);
 
   const navigate = useNavigate();
   const { logout, user } = useAuth();
+
+  // Scroll handler for Real-Time Features
+  const handleScroll = (direction) => {
+    if (scrollContainerRef.current) {
+      const scrollAmount = 350; // Width of card + gap
+      const newPosition =
+        direction === "left"
+          ? scrollPosition - scrollAmount
+          : scrollPosition + scrollAmount;
+      scrollContainerRef.current.scrollLeft = newPosition;
+      setScrollPosition(newPosition);
+    }
+  };
 
   // Fetch data
   const { data: vehicles, isLoading: vehiclesLoading } = useQuery({
@@ -447,148 +463,178 @@ export default function DashboardPage() {
               Real-Time Features
             </h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Card 1: Live Tracking */}
-            <Link to="/dashboard/tracking" className="no-underline">
-              <motion.div
-                whileHover={{ scale: 1.03, y: -5 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Card className="h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
-                  <div className="absolute inset-0 bg-linear-to-br from-blue-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <CardHeader className="pb-3 relative z-10">
-                    <CardTitle className="flex items-center gap-3 text-lg font-bold">
-                      <div className="bg-linear-to-br from-blue-500 to-indigo-600 p-2.5 rounded-xl">
-                        <MapPin className="h-5 w-5 text-white" />
-                      </div>
-                      Live Tracking
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="relative z-10">
-                    <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                      Real-time vehicle locations and driver tracking with live
-                      updates
-                    </p>
-                    <div className="flex items-center text-blue-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
-                      View Tracking <ChevronRight className="h-4 w-4" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </Link>
 
-            {/* Card 2: Messages */}
-            <Link to="/dashboard/messages" className="no-underline">
-              <motion.div
-                whileHover={{ scale: 1.03, y: -5 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Card className="h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
-                  <div className="absolute inset-0 bg-linear-to-br from-emerald-500/10 to-teal-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <CardHeader className="pb-3 relative z-10">
-                    <CardTitle className="flex items-center gap-3 text-lg font-bold">
-                      <div className="bg-linear-to-br from-emerald-500 to-teal-600 p-2.5 rounded-xl">
-                        <MessageSquare className="h-5 w-5 text-white" />
-                      </div>
-                      Messages
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="relative z-10">
-                    <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                      Real-time chat with drivers, managers, and team members
-                    </p>
-                    <div className="flex items-center text-emerald-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
-                      Open Chat <ChevronRight className="h-4 w-4" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </Link>
+          {/* Scrollable Container with Controls */}
+          <div className="relative group">
+            {/* Left Scroll Button */}
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleScroll("left")}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 backdrop-blur-xl hover:bg-white shadow-xl rounded-full p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 border border-white/20"
+            >
+              <ChevronLeft className="h-5 w-5 text-blue-600" />
+            </motion.button>
 
-            {/* Card 3: Maintenance */}
-            <Link to="/dashboard/maintenance" className="no-underline">
-              <motion.div
-                whileHover={{ scale: 1.03, y: -5 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Card className="h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
-                  <div className="absolute inset-0 bg-linear-to-br from-orange-500/10 to-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <CardHeader className="pb-3 relative z-10">
-                    <CardTitle className="flex items-center gap-3 text-lg font-bold">
-                      <div className="bg-linear-to-br from-orange-500 to-red-600 p-2.5 rounded-xl">
-                        <Wrench className="h-5 w-5 text-white" />
-                      </div>
-                      Maintenance
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="relative z-10">
-                    <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                      Schedule and track vehicle maintenance tasks and repairs
-                    </p>
-                    <div className="flex items-center text-orange-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
-                      Manage Maintenance <ChevronRight className="h-4 w-4" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </Link>
+            {/* Right Scroll Button */}
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => handleScroll("right")}
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 backdrop-blur-xl hover:bg-white shadow-xl rounded-full p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 border border-white/20"
+            >
+              <ChevronRight className="h-5 w-5 text-blue-600" />
+            </motion.button>
 
-            {/* Card 4: Notifications */}
-            <Link to="/dashboard/notifications" className="no-underline">
-              <motion.div
-                whileHover={{ scale: 1.03, y: -5 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Card className="h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
-                  <div className="absolute inset-0 bg-linear-to-br from-amber-500/10 to-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <CardHeader className="pb-3 relative z-10">
-                    <CardTitle className="flex items-center gap-3 text-lg font-bold">
-                      <div className="bg-linear-to-br from-amber-500 to-orange-600 p-2.5 rounded-xl">
-                        <Bell className="h-5 w-5 text-white" />
+            {/* Scrollable Cards Container */}
+            <div
+              ref={scrollContainerRef}
+              className="flex gap-6 overflow-x-hidden scroll-smooth pb-2"
+            >
+              {/* Card 1: Live Tracking */}
+              <Link to="/dashboard/tracking" className="no-underline min-w-max">
+                <motion.div
+                  whileHover={{ scale: 1.03, y: -5 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Card className="w-80 h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
+                    <div className="absolute inset-0 bg-linear-to-br from-blue-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <CardHeader className="pb-3 relative z-10">
+                      <CardTitle className="flex items-center gap-3 text-lg font-bold">
+                        <div className="bg-linear-to-br from-blue-500 to-indigo-600 p-2.5 rounded-xl">
+                          <MapPin className="h-5 w-5 text-white" />
+                        </div>
+                        Live Tracking
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="relative z-10">
+                      <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                        Real-time vehicle locations and driver tracking with
+                        live updates
+                      </p>
+                      <div className="flex items-center text-blue-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
+                        View Tracking <ChevronRight className="h-4 w-4" />
                       </div>
-                      Notifications
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="relative z-10">
-                    <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                      Real-time alerts for vehicle alerts, maintenance, and
-                      assignments
-                    </p>
-                    <div className="flex items-center text-amber-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
-                      View Alerts <ChevronRight className="h-4 w-4" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </Link>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </Link>
 
-            {/* Card 5: Vehicles */}
-            <Link to="/dashboard/vehicles" className="no-underline">
-              <motion.div
-                whileHover={{ scale: 1.03, y: -5 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Card className="h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
-                  <div className="absolute inset-0 bg-linear-to-br from-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  <CardHeader className="pb-3 relative z-10">
-                    <CardTitle className="flex items-center gap-3 text-lg font-bold">
-                      <div className="bg-linear-to-br from-purple-500 to-pink-600 p-2.5 rounded-xl">
-                        <Truck className="h-5 w-5 text-white" />
+              {/* Card 2: Messages */}
+              <Link to="/dashboard/messages" className="no-underline min-w-max">
+                <motion.div
+                  whileHover={{ scale: 1.03, y: -5 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Card className="w-80 h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
+                    <div className="absolute inset-0 bg-linear-to-br from-emerald-500/10 to-teal-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <CardHeader className="pb-3 relative z-10">
+                      <CardTitle className="flex items-center gap-3 text-lg font-bold">
+                        <div className="bg-linear-to-br from-emerald-500 to-teal-600 p-2.5 rounded-xl">
+                          <MessageSquare className="h-5 w-5 text-white" />
+                        </div>
+                        Messages
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="relative z-10">
+                      <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                        Real-time chat with drivers, managers, and team members
+                      </p>
+                      <div className="flex items-center text-emerald-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
+                        Open Chat <ChevronRight className="h-4 w-4" />
                       </div>
-                      Vehicles
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="relative z-10">
-                    <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                      Manage fleet vehicles with location tracking and details
-                    </p>
-                    <div className="flex items-center text-purple-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
-                      View Fleet <ChevronRight className="h-4 w-4" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </Link>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </Link>
+
+              {/* Card 3: Maintenance */}
+              <Link to="/dashboard/maintenance" className="no-underline min-w-max">
+                <motion.div
+                  whileHover={{ scale: 1.03, y: -5 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Card className="w-80 h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
+                    <div className="absolute inset-0 bg-linear-to-br from-orange-500/10 to-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <CardHeader className="pb-3 relative z-10">
+                      <CardTitle className="flex items-center gap-3 text-lg font-bold">
+                        <div className="bg-linear-to-br from-orange-500 to-red-600 p-2.5 rounded-xl">
+                          <Wrench className="h-5 w-5 text-white" />
+                        </div>
+                        Maintenance
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="relative z-10">
+                      <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                        Schedule and track vehicle maintenance tasks and
+                        repairs
+                      </p>
+                      <div className="flex items-center text-orange-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
+                        Manage Maintenance <ChevronRight className="h-4 w-4" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </Link>
+
+              {/* Card 4: Notifications */}
+              <Link to="/dashboard/notifications" className="no-underline min-w-max">
+                <motion.div
+                  whileHover={{ scale: 1.03, y: -5 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Card className="w-80 h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
+                    <div className="absolute inset-0 bg-linear-to-br from-amber-500/10 to-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <CardHeader className="pb-3 relative z-10">
+                      <CardTitle className="flex items-center gap-3 text-lg font-bold">
+                        <div className="bg-linear-to-br from-amber-500 to-orange-600 p-2.5 rounded-xl">
+                          <Bell className="h-5 w-5 text-white" />
+                        </div>
+                        Notifications
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="relative z-10">
+                      <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                        Real-time alerts for vehicle alerts, maintenance, and
+                        assignments
+                      </p>
+                      <div className="flex items-center text-amber-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
+                        View Alerts <ChevronRight className="h-4 w-4" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </Link>
+
+              {/* Card 5: Vehicles */}
+              <Link to="/dashboard/vehicles" className="no-underline min-w-max">
+                <motion.div
+                  whileHover={{ scale: 1.03, y: -5 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Card className="w-80 h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
+                    <div className="absolute inset-0 bg-linear-to-br from-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <CardHeader className="pb-3 relative z-10">
+                      <CardTitle className="flex items-center gap-3 text-lg font-bold">
+                        <div className="bg-linear-to-br from-purple-500 to-pink-600 p-2.5 rounded-xl">
+                          <Truck className="h-5 w-5 text-white" />
+                        </div>
+                        Vehicles
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="relative z-10">
+                      <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                        Manage fleet vehicles with location tracking and
+                        details
+                      </p>
+                      <div className="flex items-center text-purple-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
+                        View Fleet <ChevronRight className="h-4 w-4" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </Link>
+            </div>
           </div>
         </motion.div>
 
