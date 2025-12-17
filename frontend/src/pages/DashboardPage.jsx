@@ -51,62 +51,87 @@ import { useAuth } from "../contexts/AuthContext";
 import { motion } from "framer-motion";
 
 // API services for real-time data
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = "http://localhost:5001/api";
+
+const getAuthToken = () => {
+  return localStorage.getItem("token");
+};
+
+const fetchWithAuth = async (url) => {
+  const token = getAuthToken();
+  const headers = {
+    "Content-Type": "application/json",
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    console.error(`API Error: ${response.status} ${response.statusText}`);
+    throw new Error(`Failed to fetch from ${url}`);
+  }
+  return await response.json();
+};
 
 const getVehicles = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/vehicles`);
-    if (!response.ok) throw new Error("Failed to fetch vehicles");
-    return await response.json();
+    console.log("📍 Fetching vehicles...");
+    const data = await fetchWithAuth(`${API_BASE_URL}/vehicles`);
+    console.log("✅ Vehicles fetched:", data);
+    return data;
   } catch (error) {
-    console.error("Error fetching vehicles:", error);
+    console.error("❌ Error fetching vehicles:", error);
     return [];
   }
 };
 
 const getDrivers = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/drivers`);
-    if (!response.ok) throw new Error("Failed to fetch drivers");
-    return await response.json();
+    console.log("👥 Fetching drivers...");
+    const data = await fetchWithAuth(`${API_BASE_URL}/drivers`);
+    console.log("✅ Drivers fetched:", data);
+    return data;
   } catch (error) {
-    console.error("Error fetching drivers:", error);
+    console.error("❌ Error fetching drivers:", error);
     return [];
   }
 };
 
 const getAssignments = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/assignments`);
-    if (!response.ok) throw new Error("Failed to fetch assignments");
-    return await response.json();
+    console.log("📋 Fetching assignments...");
+    const data = await fetchWithAuth(`${API_BASE_URL}/assignments`);
+    console.log("✅ Assignments fetched:", data);
+    return data;
   } catch (error) {
-    console.error("Error fetching assignments:", error);
+    console.error("❌ Error fetching assignments:", error);
     return [];
   }
 };
 
 const getFuelLogs = async ({ from, to }) => {
   try {
+    console.log("⛽ Fetching fuel logs...");
     const params = new URLSearchParams();
     if (from) params.append("from", from);
     if (to) params.append("to", to);
-    const response = await fetch(
+    const data = await fetchWithAuth(
       `${API_BASE_URL}/fuels?${params.toString()}`
     );
-    if (!response.ok) throw new Error("Failed to fetch fuel logs");
-    return await response.json();
+    console.log("✅ Fuel logs fetched:", data);
+    return data;
   } catch (error) {
-    console.error("Error fetching fuel logs:", error);
+    console.error("❌ Error fetching fuel logs:", error);
     return [];
   }
 };
 
 const getMaintenance = async ({ from, to }) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/maintenance`);
-    if (!response.ok) throw new Error("Failed to fetch maintenance records");
-    const data = await response.json();
+    console.log("🔧 Fetching maintenance records...");
+    const data = await fetchWithAuth(`${API_BASE_URL}/maintenance`);
+    console.log("✅ Maintenance records fetched:", data);
     
     // Filter by date range if provided
     if (from || to) {
@@ -121,7 +146,7 @@ const getMaintenance = async ({ from, to }) => {
     }
     return data;
   } catch (error) {
-    console.error("Error fetching maintenance:", error);
+    console.error("❌ Error fetching maintenance:", error);
     return [];
   }
 };
