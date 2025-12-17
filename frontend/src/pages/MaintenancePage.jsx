@@ -32,6 +32,13 @@ export default function MaintenancePage() {
     fetchVehicles();
     fetchAllData();
     fetchLocations();
+
+    // Auto-refetch maintenance data every 10 seconds
+    const refetchInterval = setInterval(() => {
+      fetchAllData();
+    }, 10000);
+
+    return () => clearInterval(refetchInterval);
   }, []);
 
   // Refetch locations when map tab is active
@@ -40,6 +47,13 @@ export default function MaintenancePage() {
       fetchLocations();
       const interval = setInterval(fetchLocations, 30000); // Refresh every 30 seconds
       return () => clearInterval(interval);
+    }
+  }, [activeTab]);
+
+  // Refetch data when switching to upcoming/overdue tabs
+  useEffect(() => {
+    if (activeTab === 'upcoming' || activeTab === 'overdue') {
+      fetchAllData();
     }
   }, [activeTab]);
 
