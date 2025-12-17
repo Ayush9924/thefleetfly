@@ -16,7 +16,7 @@
 │ ⚠️  [VEH-003] OVD │                                 │
 │ 📅 [VEH-004] UP  │  📍 Current Location             │
 │ ✅ [VEH-005]     │  Baker Street, New York, NY      │
-│                  │  GPS: 40.7128, -74.0060         │
+│                  │  GPS: 40.7128, -74.0060          |
 │                  │  Speed: 🟢 Moving 45.2 km/h     │
 │                  │  Last: 2:30 PM                  │
 │                  │                                  │

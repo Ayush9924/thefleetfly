@@ -1,16 +1,16 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Card, CardContent, CardDescription } from '../components/ui/card';
-import { Loader2, Mail, Lock } from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Card, CardContent, CardDescription } from "../components/ui/card";
+import { Loader2, Mail, Lock } from "lucide-react";
+import { toast } from "react-hot-toast";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const { login } = useAuth();
@@ -18,12 +18,12 @@ export default function LoginPage() {
 
   const validateForm = () => {
     if (!email || !password) {
-      toast.error('Please fill in all required fields');
+      toast.error("Please fill in all required fields");
       return false;
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.error('Please enter a valid email address');
+      toast.error("Please enter a valid email address");
       return false;
     }
 
@@ -44,12 +44,13 @@ export default function LoginPage() {
 
     try {
       await login(email, password);
-      navigate('/');
+      navigate("/");
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error("Login failed:", error);
       setHasError(true);
 
-      const errorMessage = error.response?.data?.message || 'Invalid email or password';
+      const errorMessage =
+        error.response?.data?.message || "Invalid email or password";
       toast.error(errorMessage);
 
       setTimeout(() => setHasError(false), 2000);
@@ -64,9 +65,9 @@ export default function LoginPage() {
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1
-      }
-    }
+        staggerChildren: 0.1,
+      },
+    },
   };
 
   const itemVariants = {
@@ -76,18 +77,18 @@ export default function LoginPage() {
       opacity: 1,
       transition: {
         duration: 0.5,
-        ease: "easeOut"
-      }
-    }
+        ease: "easeOut",
+      },
+    },
   };
 
   const errorVariants = {
     animate: {
       x: [0, -10, 10, -10, 10, 0],
       transition: {
-        duration: 0.5
-      }
-    }
+        duration: 0.5,
+      },
+    },
   };
 
   return (
@@ -115,7 +116,7 @@ export default function LoginPage() {
               {/* Header with gradient */}
               <div className="bg-linear-to-r from-blue-600 to-indigo-600 p-6 text-center">
                 <div className="text-3xl font-bold text-white">
-                  Fleet<span className="text-blue-100">Pro</span>
+                  Fleet<span className="text-blue-100">Fly</span>
                 </div>
                 <CardDescription className="text-blue-100 mt-2">
                   Sign in to your dashboard
@@ -131,7 +132,10 @@ export default function LoginPage() {
                   animate="visible"
                 >
                   <motion.div variants={itemVariants} className="space-y-2">
-                    <label htmlFor="email" className="text-sm font-medium text-gray-700 flex items-center">
+                    <label
+                      htmlFor="email"
+                      className="text-sm font-medium text-gray-700 flex items-center"
+                    >
                       <Mail className="w-4 h-4 mr-2 text-blue-600 shrink-0" />
                       Email Address
                     </label>
@@ -150,7 +154,10 @@ export default function LoginPage() {
                   </motion.div>
 
                   <motion.div variants={itemVariants} className="space-y-2">
-                    <label htmlFor="password" className="text-sm font-medium text-gray-700 flex items-center">
+                    <label
+                      htmlFor="password"
+                      className="text-sm font-medium text-gray-700 flex items-center"
+                    >
                       <Lock className="w-4 h-4 mr-2 text-blue-600 shrink-0" />
                       Password
                     </label>
@@ -180,7 +187,7 @@ export default function LoginPage() {
                           Signing In...
                         </>
                       ) : (
-                        'Sign In'
+                        "Sign In"
                       )}
                     </Button>
                   </motion.div>
@@ -194,11 +201,18 @@ export default function LoginPage() {
                   transition={{ delay: 0.3 }}
                 >
                   <p className="text-xs text-gray-500">
-                    Demo credentials: <span className="font-mono bg-gray-100 px-2 py-1 rounded">admin@fleet.com</span> / <span className="font-mono bg-gray-100 px-2 py-1 rounded">admin123</span>
+                    Demo credentials:{" "}
+                    <span className="font-mono bg-gray-100 px-2 py-1 rounded">
+                      admin@fleet.com
+                    </span>{" "}
+                    /{" "}
+                    <span className="font-mono bg-gray-100 px-2 py-1 rounded">
+                      admin123
+                    </span>
                   </p>
 
                   <div className="text-sm text-gray-600">
-                    Don't have an account?{' '}
+                    Don't have an account?{" "}
                     <Link
                       to="/signup"
                       className="text-blue-600 hover:text-blue-700 font-semibold transition-colors"

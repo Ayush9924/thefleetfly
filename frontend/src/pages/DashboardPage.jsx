@@ -549,7 +549,10 @@ export default function DashboardPage() {
               </Link>
 
               {/* Card 3: Maintenance */}
-              <Link to="/dashboard/maintenance" className="no-underline min-w-max">
+              <Link
+                to="/dashboard/maintenance"
+                className="no-underline min-w-max"
+              >
                 <motion.div
                   whileHover={{ scale: 1.03, y: -5 }}
                   transition={{ duration: 0.3 }}
@@ -566,8 +569,7 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent className="relative z-10">
                       <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                        Schedule and track vehicle maintenance tasks and
-                        repairs
+                        Schedule and track vehicle maintenance tasks and repairs
                       </p>
                       <div className="flex items-center text-orange-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
                         Manage Maintenance <ChevronRight className="h-4 w-4" />
@@ -578,7 +580,10 @@ export default function DashboardPage() {
               </Link>
 
               {/* Card 4: Notifications */}
-              <Link to="/dashboard/notifications" className="no-underline min-w-max">
+              <Link
+                to="/dashboard/notifications"
+                className="no-underline min-w-max"
+              >
                 <motion.div
                   whileHover={{ scale: 1.03, y: -5 }}
                   transition={{ duration: 0.3 }}
@@ -624,8 +629,7 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent className="relative z-10">
                       <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                        Manage fleet vehicles with location tracking and
-                        details
+                        Manage fleet vehicles with location tracking and details
                       </p>
                       <div className="flex items-center text-purple-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
                         View Fleet <ChevronRight className="h-4 w-4" />
