@@ -50,47 +50,81 @@ import { Skeleton } from "../components/ui/skeleton";
 import { useAuth } from "../contexts/AuthContext";
 import { motion } from "framer-motion";
 
-// Mock API services (replace with your real ones)
-const getVehicles = () =>
-  Promise.resolve([
-    { _id: "1", plateNumber: "ABC-123", status: "active" },
-    { _id: "2", plateTime: "XYZ-789", status: "maintenance" },
-    { _id: "3", plateNumber: "DEF-456", status: "active" },
-  ]);
-const getDrivers = () =>
-  Promise.resolve([
-    { _id: "1", name: "John Smith", status: "available" },
-    { _id: "2", name: "Maria Garcia", status: "on-duty" },
-  ]);
-const getAssignments = () =>
-  Promise.resolve([
-    { _id: "1", driver: "John Smith", isActive: true },
-    { _id: "2", driver: "Maria Garcia", isActive: true },
-  ]);
-const getFuelLogs = ({ from, to }) =>
-  Promise.resolve([
-    { _id: "1", date: new Date(), cost: 120.5, vehicle: "ABC-123" },
-    { _id: "2", date: subDays(new Date(), 1), cost: 98.75, vehicle: "DEF-456" },
-  ]);
-const getMaintenance = ({ from, to }) =>
-  Promise.resolve([
-    {
-      _id: "1",
-      description: "Oil Change",
-      cost: 75,
-      dueDate: new Date(),
-      status: "pending",
-      vehicle: { plateNumber: "ABC-123" },
-    },
-    {
-      _id: "2",
-      description: "Brake Service",
-      cost: 220,
-      dueDate: subDays(new Date(), 2),
-      status: "completed",
-      vehicle: { plateNumber: "XYZ-789" },
-    },
-  ]);
+// API services for real-time data
+const API_BASE_URL = "http://localhost:5000/api";
+
+const getVehicles = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/vehicles`);
+    if (!response.ok) throw new Error("Failed to fetch vehicles");
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching vehicles:", error);
+    return [];
+  }
+};
+
+const getDrivers = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/drivers`);
+    if (!response.ok) throw new Error("Failed to fetch drivers");
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching drivers:", error);
+    return [];
+  }
+};
+
+const getAssignments = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/assignments`);
+    if (!response.ok) throw new Error("Failed to fetch assignments");
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching assignments:", error);
+    return [];
+  }
+};
+
+const getFuelLogs = async ({ from, to }) => {
+  try {
+    const params = new URLSearchParams();
+    if (from) params.append("from", from);
+    if (to) params.append("to", to);
+    const response = await fetch(
+      `${API_BASE_URL}/fuels?${params.toString()}`
+    );
+    if (!response.ok) throw new Error("Failed to fetch fuel logs");
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching fuel logs:", error);
+    return [];
+  }
+};
+
+const getMaintenance = async ({ from, to }) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/maintenance`);
+    if (!response.ok) throw new Error("Failed to fetch maintenance records");
+    const data = await response.json();
+    
+    // Filter by date range if provided
+    if (from || to) {
+      const fromDate = from ? new Date(from) : null;
+      const toDate = to ? new Date(to) : null;
+      return data.filter((record) => {
+        const recordDate = new Date(record.date || record.dueDate);
+        if (fromDate && recordDate < fromDate) return false;
+        if (toDate && recordDate > toDate) return false;
+        return true;
+      });
+    }
+    return data;
+  } catch (error) {
+    console.error("Error fetching maintenance:", error);
+    return [];
+  }
+};
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
 
@@ -118,20 +152,26 @@ export default function DashboardPage() {
     }
   };
 
-  // Fetch data
+  // Fetch data with real-time updates
   const { data: vehicles, isLoading: vehiclesLoading } = useQuery({
     queryKey: ["vehicles"],
     queryFn: getVehicles,
+    refetchInterval: 5000, // Refetch every 5 seconds
+    staleTime: 2000,
   });
 
   const { data: drivers, isLoading: driversLoading } = useQuery({
     queryKey: ["drivers"],
     queryFn: getDrivers,
+    refetchInterval: 5000,
+    staleTime: 2000,
   });
 
   const { data: assignments, isLoading: assignmentsLoading } = useQuery({
     queryKey: ["assignments"],
     queryFn: getAssignments,
+    refetchInterval: 5000,
+    staleTime: 2000,
   });
 
   const { data: fuelLogs, isLoading: fuelLogsLoading } = useQuery({
@@ -147,6 +187,8 @@ export default function DashboardPage() {
         from: startOfWeek(new Date()).toISOString(),
         to: endOfWeek(new Date()).toISOString(),
       }),
+    refetchInterval: 5000,
+    staleTime: 2000,
   });
 
   const { data: maintenanceRecords, isLoading: maintenanceLoading } = useQuery({
@@ -162,6 +204,8 @@ export default function DashboardPage() {
         from: startOfWeek(new Date()).toISOString(),
         to: endOfWeek(new Date()).toISOString(),
       }),
+    refetchInterval: 5000,
+    staleTime: 2000,
   });
 
   // Process fuel chart data
@@ -213,7 +257,7 @@ export default function DashboardPage() {
     }
   }, [vehicles]);
 
-  // Calculate KPIs
+  // Calculate KPIs with real data
   const totalVehicles = vehicles?.length || 0;
   const activeVehicles =
     vehicles?.filter((v) => v.status === "active")?.length || 0;
@@ -222,37 +266,30 @@ export default function DashboardPage() {
   const activeAssignments = assignments?.filter((a) => a.isActive)?.length || 0;
   const vehiclesInMaintenance =
     vehicles?.filter((v) => v.status === "maintenance")?.length || 0;
-  const totalFuelCost = fuelLogs?.reduce((sum, log) => sum + log.cost, 0) || 0;
+  const totalFuelCost = fuelLogs?.reduce((sum, log) => sum + (log.cost || 0), 0) || 0;
   const totalMaintenanceCost =
-    maintenanceRecords?.reduce((sum, rec) => sum + rec.cost, 0) || 0;
+    maintenanceRecords?.reduce((sum, rec) => sum + (rec.cost || 0), 0) || 0;
   const upcomingMaintenance =
     maintenanceRecords?.filter(
       (rec) =>
-        new Date(rec.dueDate) <= subDays(new Date(), 7) &&
-        rec.status === "pending"
+        rec.status === "pending" &&
+        (!rec.dueDate || new Date(rec.dueDate) >= new Date())
     ).length || 0;
 
+  // Calculate trends (using percentage change calculation)
   const calculateTrend = (current, previous) => {
-    if (previous === 0) return { value: 0, isPositive: true };
+    if (previous === 0) return { value: 0, isPositive: current >= 0 };
     const change = ((current - previous) / previous) * 100;
-    return { value: change, isPositive: change >= 0 };
+    return { value: Math.round(change * 10) / 10, isPositive: change >= 0 };
   };
 
-  const vehicleTrend = calculateTrend(totalVehicles, totalVehicles - 1);
-  const driverTrend = calculateTrend(availableDrivers, availableDrivers - 1);
-  const assignmentTrend = calculateTrend(
-    activeAssignments,
-    activeAssignments - 1
-  );
-  const maintenanceTrend = calculateTrend(
-    vehiclesInMaintenance,
-    vehiclesInMaintenance + 1
-  );
-  const fuelCostTrend = calculateTrend(totalFuelCost, totalFuelCost - 50);
-  const upcomingTrend = calculateTrend(
-    upcomingMaintenance,
-    upcomingMaintenance - 1
-  );
+  // Placeholder previous values for trend - in production, fetch from backend
+  const vehicleTrend = calculateTrend(totalVehicles, totalVehicles > 0 ? totalVehicles - 1 : 3);
+  const driverTrend = calculateTrend(availableDrivers, availableDrivers > 0 ? availableDrivers + 1 : 1);
+  const assignmentTrend = calculateTrend(activeAssignments, activeAssignments > 0 ? activeAssignments - 1 : 2);
+  const maintenanceTrend = calculateTrend(vehiclesInMaintenance, vehiclesInMaintenance > 0 ? vehiclesInMaintenance - 1 : 1);
+  const fuelCostTrend = calculateTrend(totalFuelCost, totalFuelCost > 0 ? totalFuelCost - 50 : 169.25);
+  const upcomingTrend = calculateTrend(upcomingMaintenance, 1);
 
   // Handle logout
   const handleLogout = async () => {
