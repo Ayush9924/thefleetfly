@@ -4,10 +4,16 @@ const Vehicle = require('../models/Vehicle');
 // @route   GET /api/vehicles
 const getVehicles = async (req, res) => {
   try {
-    const vehicles = await Vehicle.find().sort({ createdAt: -1 });
+    console.log('📋 Fetching vehicles from database...');
+    const vehicles = await Vehicle.find().sort({ createdAt: -1 }).maxTimeMS(10000);
+    console.log(`✅ Found ${vehicles.length} vehicles`);
     res.json(vehicles);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('❌ Error fetching vehicles:', error.message);
+    res.status(500).json({ 
+      message: 'Failed to fetch vehicles. ' + error.message,
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
