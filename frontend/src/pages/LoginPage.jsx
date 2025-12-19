@@ -115,7 +115,7 @@ export default function LoginPage() {
               {/* Header with gradient */}
               <div className="bg-linear-to-r from-blue-600 to-indigo-600 p-6 text-center">
                 <div className="text-3xl font-bold text-white">
-                  Fleet<span className="text-blue-100">Pro</span>
+                  Fleet<span className="text-blue-100">Fly</span>
                 </div>
                 <CardDescription className="text-blue-100 mt-2">
                   Sign in to your dashboard
