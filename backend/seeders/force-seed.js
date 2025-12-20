@@ -1,6 +1,9 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
-const bcrypt = require('bcryptjs');
+
+// ⚠️  WARNING: This script DELETES all data in the database!
+// Only use this if you need to completely reset the database.
+// Use: node seeders/force-seed.js
 
 // Import models
 const User = require('../models/User');
@@ -14,22 +17,21 @@ const Maintenance = require('../models/Maintenance');
 const connectDB = require('../config/db');
 connectDB();
 
-const seed = async () => {
+const forceSeed = async () => {
   try {
-    // Check if data already exists
-    const userCount = await User.countDocuments();
-    const vehicleCount = await Vehicle.countDocuments();
-    const driverCount = await Driver.countDocuments();
+    console.log('⚠️  Force clearing all data...');
+    
+    // Clear all collections
+    await User.deleteMany();
+    await Vehicle.deleteMany();
+    await Driver.deleteMany();
+    await Assignment.deleteMany();
+    await FuelLog.deleteMany();
+    await Maintenance.deleteMany();
 
-    if (userCount > 0 || vehicleCount > 0 || driverCount > 0) {
-      console.log('⚠️  Database already has data. Skipping seed to preserve existing data.');
-      console.log(`   Users: ${userCount}, Vehicles: ${vehicleCount}, Drivers: ${driverCount}`);
-      process.exit(0);
-    }
+    console.log('✅ Database cleared...');
 
-    console.log('Seeding database with initial data...');
-
-    // Create admin user (password will be hashed by User model pre-hook)
+    // Create admin user
     const admin = await User.create({
       name: 'Admin User',
       email: 'admin@fleet.com',
@@ -37,7 +39,7 @@ const seed = async () => {
       role: 'admin'
     });
 
-    console.log('Admin user created...');
+    console.log('✅ Admin user created...');
 
     // Create vehicles
     const vehicles = [];
@@ -54,7 +56,7 @@ const seed = async () => {
       );
     }
 
-    console.log('Vehicles created...');
+    console.log('✅ Vehicles created...');
 
     // Create drivers
     const drivers = [];
@@ -69,7 +71,7 @@ const seed = async () => {
       );
     }
 
-    console.log('Drivers created...');
+    console.log('✅ Drivers created...');
 
     // Create assignments
     for (let i = 0; i < 3; i++) {
@@ -81,9 +83,9 @@ const seed = async () => {
       });
     }
 
-    console.log('Assignments created...');
+    console.log('✅ Assignments created...');
 
-    // Create maintenance records
+    // Create maintenance records with proper scheduled fields
     const maintenanceData = [
       {
         vehicle: vehicles[0]._id,
@@ -154,14 +156,13 @@ const seed = async () => {
       await Maintenance.create(maintenance);
     }
 
-    console.log('Maintenance records created...');
-
-    console.log('Database seeded successfully!');
+    console.log('✅ Maintenance records created...');
+    console.log('✅ Database seeded successfully!');
     process.exit();
   } catch (error) {
-    console.error('Error seeding database:', error);
+    console.error('❌ Error seeding database:', error);
     process.exit(1);
   }
 };
 
-seed();
+forceSeed();

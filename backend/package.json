@@ -6,6 +6,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "seed": "node seeders/seed.js",
+    "seed:force": "node seeders/force-seed.js",
     "test": "jest --verbose",
     "test:watch": "jest --watch"
   },

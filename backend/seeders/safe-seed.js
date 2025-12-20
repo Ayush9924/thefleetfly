@@ -90,63 +90,45 @@ const seed = async () => {
         description: 'oil change',
         cost: 19.69,
         status: 'scheduled',
-        isScheduled: true,
-        scheduleType: 'one-time',
-        nextScheduledDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        scheduledDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         estimatedDuration: 2,
-        priority: 'high',
-        maintenanceType: 'routine'
+        priority: 'high'
       },
       {
         vehicle: vehicles[1]._id,
         description: 'Battery replacement',
         cost: 120.00,
         status: 'scheduled',
-        isScheduled: true,
-        scheduleType: 'one-time',
-        nextScheduledDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-        scheduledDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
         estimatedDuration: 1,
-        priority: 'medium',
-        maintenanceType: 'routine'
+        priority: 'medium'
       },
       {
         vehicle: vehicles[2]._id,
         description: 'Engine inspection',
         cost: 180.00,
-        status: 'scheduled',
-        isScheduled: true,
-        scheduleType: 'one-time',
-        nextScheduledDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-        scheduledDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        status: 'overdue',
+        dueDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
         estimatedDuration: 3,
-        priority: 'medium',
-        maintenanceType: 'routine'
+        priority: 'medium'
       },
       {
         vehicle: vehicles[3]._id,
         description: 'Tire rotation and alignment',
         cost: 200.00,
         status: 'scheduled',
-        isScheduled: true,
-        scheduleType: 'one-time',
-        nextScheduledDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
-        scheduledDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+        dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
         estimatedDuration: 1.5,
-        priority: 'medium',
-        maintenanceType: 'routine'
+        priority: 'medium'
       },
       {
         vehicle: vehicles[4]._id,
         description: 'Brake pad replacement',
         cost: 250.00,
         status: 'pending',
-        isScheduled: false,
-        nextScheduledDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+        dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
         estimatedDuration: 2,
-        priority: 'medium',
-        maintenanceType: 'routine'
+        priority: 'medium'
       }
     ];
 

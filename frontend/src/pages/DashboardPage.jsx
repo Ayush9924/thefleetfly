@@ -50,47 +50,119 @@ import { Skeleton } from "../components/ui/skeleton";
 import { useAuth } from "../contexts/AuthContext";
 import { motion } from "framer-motion";
 
-// Mock API services (replace with your real ones)
-const getVehicles = () =>
-  Promise.resolve([
-    { _id: "1", plateNumber: "ABC-123", status: "active" },
-    { _id: "2", plateTime: "XYZ-789", status: "maintenance" },
-    { _id: "3", plateNumber: "DEF-456", status: "active" },
-  ]);
-const getDrivers = () =>
-  Promise.resolve([
-    { _id: "1", name: "John Smith", status: "available" },
-    { _id: "2", name: "Maria Garcia", status: "on-duty" },
-  ]);
-const getAssignments = () =>
-  Promise.resolve([
-    { _id: "1", driver: "John Smith", isActive: true },
-    { _id: "2", driver: "Maria Garcia", isActive: true },
-  ]);
-const getFuelLogs = ({ from, to }) =>
-  Promise.resolve([
-    { _id: "1", date: new Date(), cost: 120.5, vehicle: "ABC-123" },
-    { _id: "2", date: subDays(new Date(), 1), cost: 98.75, vehicle: "DEF-456" },
-  ]);
-const getMaintenance = ({ from, to }) =>
-  Promise.resolve([
-    {
-      _id: "1",
-      description: "Oil Change",
-      cost: 75,
-      dueDate: new Date(),
-      status: "pending",
-      vehicle: { plateNumber: "ABC-123" },
-    },
-    {
-      _id: "2",
-      description: "Brake Service",
-      cost: 220,
-      dueDate: subDays(new Date(), 2),
-      status: "completed",
-      vehicle: { plateNumber: "XYZ-789" },
-    },
-  ]);
+// API services for real-time data
+const API_BASE_URL = "http://localhost:5001/api";
+
+const getAuthToken = () => {
+  return localStorage.getItem("token");
+};
+
+const fetchWithAuth = async (url) => {
+  const token = getAuthToken();
+  const headers = {
+    "Content-Type": "application/json",
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    console.error(`API Error: ${response.status} ${response.statusText}`);
+    throw new Error(`Failed to fetch from ${url}`);
+  }
+  return await response.json();
+};
+
+const getVehicles = async () => {
+  try {
+    console.log("📍 Fetching vehicles...");
+    const data = await fetchWithAuth(`${API_BASE_URL}/vehicles`);
+    console.log("✅ Vehicles fetched:", data);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error("❌ Error fetching vehicles:", error);
+    return [];
+  }
+};
+
+const getDrivers = async () => {
+  try {
+    console.log("👥 Fetching drivers...");
+    const data = await fetchWithAuth(`${API_BASE_URL}/drivers`);
+    console.log("✅ Drivers fetched:", data);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error("❌ Error fetching drivers:", error);
+    return [];
+  }
+};
+
+const getAssignments = async () => {
+  try {
+    console.log("📋 Fetching assignments...");
+    const data = await fetchWithAuth(`${API_BASE_URL}/assignments`);
+    console.log("✅ Assignments fetched:", data);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error("❌ Error fetching assignments:", error);
+    return [];
+  }
+};
+
+const getFuelLogs = async ({ from, to }) => {
+  try {
+    console.log("⛽ Fetching fuel logs...");
+    const params = new URLSearchParams();
+    if (from) params.append("from", from);
+    if (to) params.append("to", to);
+    const data = await fetchWithAuth(
+      `${API_BASE_URL}/fuels?${params.toString()}`
+    );
+    console.log("✅ Fuel logs fetched:", data);
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error("❌ Error fetching fuel logs:", error);
+    return [];
+  }
+};
+
+const getMaintenance = async ({ from, to }) => {
+  try {
+    console.log("🔧 Fetching maintenance records...");
+    const data = await fetchWithAuth(`${API_BASE_URL}/maintenance`);
+    console.log("✅ Maintenance records fetched:", data);
+    
+    if (!Array.isArray(data)) {
+      console.warn("Maintenance data is not an array:", data);
+      return [];
+    }
+    
+    // Filter by date range if provided
+    if (from || to) {
+      const fromDate = from ? new Date(from) : null;
+      const toDate = to ? new Date(to) : null;
+      return data.filter((record) => {
+        try {
+          const dateValue = record?.date || record?.dueDate || record?.createdAt;
+          if (!dateValue) return false;
+          const recordDate = new Date(dateValue);
+          if (isNaN(recordDate.getTime())) return false;
+          if (fromDate && recordDate < fromDate) return false;
+          if (toDate && recordDate > toDate) return false;
+          return true;
+        } catch (error) {
+          console.warn("Error filtering maintenance record:", error);
+          return false;
+        }
+      });
+    }
+    return data;
+  } catch (error) {
+    console.error("❌ Error fetching maintenance:", error);
+    return [];
+  }
+};
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
 
@@ -100,10 +172,11 @@ export default function DashboardPage() {
   const [vehicleStatusData, setVehicleStatusData] = useState([]);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [scrollPosition, setScrollPosition] = useState(0);
+  const [renderError, setRenderError] = useState(false);
   const scrollContainerRef = useRef(null);
 
   const navigate = useNavigate();
-  const { logout, user } = useAuth();
+  const { logout, currentUser: user } = useAuth();
 
   // Scroll handler for Real-Time Features
   const handleScroll = (direction) => {
@@ -118,20 +191,26 @@ export default function DashboardPage() {
     }
   };
 
-  // Fetch data
+  // Fetch data with real-time updates
   const { data: vehicles, isLoading: vehiclesLoading } = useQuery({
     queryKey: ["vehicles"],
     queryFn: getVehicles,
+    refetchInterval: 5000, // Refetch every 5 seconds
+    staleTime: 2000,
   });
 
   const { data: drivers, isLoading: driversLoading } = useQuery({
     queryKey: ["drivers"],
     queryFn: getDrivers,
+    refetchInterval: 5000,
+    staleTime: 2000,
   });
 
   const { data: assignments, isLoading: assignmentsLoading } = useQuery({
     queryKey: ["assignments"],
     queryFn: getAssignments,
+    refetchInterval: 5000,
+    staleTime: 2000,
   });
 
   const { data: fuelLogs, isLoading: fuelLogsLoading } = useQuery({
@@ -147,6 +226,8 @@ export default function DashboardPage() {
         from: startOfWeek(new Date()).toISOString(),
         to: endOfWeek(new Date()).toISOString(),
       }),
+    refetchInterval: 5000,
+    staleTime: 2000,
   });
 
   const { data: maintenanceRecords, isLoading: maintenanceLoading } = useQuery({
@@ -162,97 +243,171 @@ export default function DashboardPage() {
         from: startOfWeek(new Date()).toISOString(),
         to: endOfWeek(new Date()).toISOString(),
       }),
+    refetchInterval: 5000,
+    staleTime: 2000,
+  });
+
+  // Fetch upcoming scheduled maintenance for KPI card
+  const { data: upcomingScheduledMaintenance = [], isLoading: upcomingMaintenanceLoading } = useQuery({
+    queryKey: ["maintenance-scheduled-upcoming"],
+    queryFn: async () => {
+      try {
+        const data = await fetchWithAuth(`${API_BASE_URL}/maintenance/scheduled/upcoming?days=30`);
+        return Array.isArray(data) ? data : [];
+      } catch (error) {
+        console.error("Error fetching upcoming maintenance:", error);
+        return [];
+      }
+    },
+    refetchInterval: 5000,
+    staleTime: 2000,
   });
 
   // Process fuel chart data
   useEffect(() => {
-    if (fuelLogs) {
-      const dailyTotals = fuelLogs.reduce((acc, log) => {
-        const date = format(new Date(log.date), "MMM dd");
-        if (!acc[date]) acc[date] = 0;
-        acc[date] += log.cost;
-        return acc;
-      }, {});
+    if (fuelLogs && fuelLogs.length > 0) {
+      try {
+        const dailyTotals = fuelLogs.reduce((acc, log) => {
+          try {
+            const dateValue = log?.date || log?.createdAt;
+            if (!dateValue) return acc;
+            
+            const dateObj = new Date(dateValue);
+            if (isNaN(dateObj.getTime())) return acc;
+            
+            // Use toLocaleDateString instead of date-fns format
+            const date = dateObj.toLocaleDateString('en-US', { 
+              month: 'short', 
+              day: 'numeric' 
+            });
+            
+            if (!acc[date]) acc[date] = 0;
+            const cost = parseFloat(log?.cost) || 0;
+            if (!isNaN(cost)) acc[date] += cost;
+          } catch (error) {
+            console.warn("Invalid date in fuel log:", error);
+          }
+          return acc;
+        }, {});
 
-      setFuelData(
-        Object.entries(dailyTotals).map(([date, cost]) => ({ date, cost }))
-      );
+        setFuelData(
+          Object.entries(dailyTotals).map(([date, cost]) => ({ date, cost }))
+        );
+      } catch (error) {
+        console.error("Error processing fuel data:", error);
+        setFuelData([]);
+      }
     }
   }, [fuelLogs]);
 
   // Process maintenance chart data
   useEffect(() => {
-    if (maintenanceRecords) {
-      const byType = maintenanceRecords.reduce((acc, record) => {
-        const type = record.description.split(" ")[0];
-        if (!acc[type]) acc[type] = 0;
-        acc[type] += record.cost;
-        return acc;
-      }, {});
+    if (Array.isArray(maintenanceRecords) && maintenanceRecords.length > 0) {
+      try {
+        const byType = maintenanceRecords.reduce((acc, record) => {
+          try {
+            const type = record?.description?.split(" ")[0] || "Other";
+            const cost = parseFloat(record?.cost) || 0;
+            if (!isNaN(cost)) {
+              if (!acc[type]) acc[type] = 0;
+              acc[type] += cost;
+            }
+          } catch (error) {
+            console.warn("Error processing maintenance record:", error);
+          }
+          return acc;
+        }, {});
 
-      setMaintenanceData(
-        Object.entries(byType).map(([type, cost]) => ({ type, cost }))
-      );
+        setMaintenanceData(
+          Object.entries(byType).map(([type, cost]) => ({ type, cost }))
+        );
+      } catch (error) {
+        console.error("Error processing maintenance data:", error);
+        setMaintenanceData([]);
+      }
     }
   }, [maintenanceRecords]);
 
   // Process vehicle status data
   useEffect(() => {
-    if (vehicles) {
-      const statusCounts = vehicles.reduce((acc, vehicle) => {
-        acc[vehicle.status] = (acc[vehicle.status] || 0) + 1;
-        return acc;
-      }, {});
+    if (Array.isArray(vehicles) && vehicles.length > 0) {
+      try {
+        const statusCounts = vehicles.reduce((acc, vehicle) => {
+          acc[vehicle?.status] = (acc[vehicle?.status] || 0) + 1;
+          return acc;
+        }, {});
 
-      setVehicleStatusData(
-        Object.entries(statusCounts).map(([status, count]) => ({
-          name: status.charAt(0).toUpperCase() + status.slice(1),
-          value: count,
-        }))
-      );
+        setVehicleStatusData(
+          Object.entries(statusCounts).map(([status, count]) => ({
+            name: status?.charAt(0).toUpperCase() + status?.slice(1),
+            value: count,
+          }))
+        );
+      } catch (error) {
+        console.error("Error processing vehicle status data:", error);
+        setVehicleStatusData([]);
+      }
     }
   }, [vehicles]);
 
-  // Calculate KPIs
-  const totalVehicles = vehicles?.length || 0;
-  const activeVehicles =
-    vehicles?.filter((v) => v.status === "active")?.length || 0;
-  const availableDrivers =
-    drivers?.filter((d) => d.status === "available")?.length || 0;
-  const activeAssignments = assignments?.filter((a) => a.isActive)?.length || 0;
-  const vehiclesInMaintenance =
-    vehicles?.filter((v) => v.status === "maintenance")?.length || 0;
-  const totalFuelCost = fuelLogs?.reduce((sum, log) => sum + log.cost, 0) || 0;
-  const totalMaintenanceCost =
-    maintenanceRecords?.reduce((sum, rec) => sum + rec.cost, 0) || 0;
-  const upcomingMaintenance =
-    maintenanceRecords?.filter(
-      (rec) =>
-        new Date(rec.dueDate) <= subDays(new Date(), 7) &&
-        rec.status === "pending"
-    ).length || 0;
+  // Calculate KPIs with real data
+  const totalVehicles = Array.isArray(vehicles) ? vehicles.length : 0;
+  const activeVehicles = Array.isArray(vehicles)
+    ? vehicles.filter((v) => v?.status === "active")?.length || 0
+    : 0;
+  const availableDrivers = Array.isArray(drivers)
+    ? drivers.filter((d) => d?.status === "available")?.length || 0
+    : 0;
+  const activeAssignments = Array.isArray(assignments)
+    ? assignments.filter((a) => a?.isActive)?.length || 0
+    : 0;
+  const vehiclesInMaintenance = Array.isArray(vehicles)
+    ? vehicles.filter((v) => v?.status === "maintenance")?.length || 0
+    : 0;
+  
+  const totalFuelCost = Array.isArray(fuelLogs)
+    ? fuelLogs.reduce((sum, log) => {
+        const cost = parseFloat(log?.cost) || 0;
+        return !isNaN(cost) ? sum + cost : sum;
+      }, 0)
+    : 0;
+  
+  const totalMaintenanceCost = Array.isArray(maintenanceRecords)
+    ? maintenanceRecords.reduce((sum, rec) => {
+        const cost = parseFloat(rec?.cost) || 0;
+        return !isNaN(cost) ? sum + cost : sum;
+      }, 0)
+    : 0;
+  
+  // Get upcoming maintenance count from scheduled maintenance data
+  const upcomingMaintenance = Array.isArray(upcomingScheduledMaintenance)
+    ? upcomingScheduledMaintenance.length
+    : 0;
 
+  // Calculate trends (using percentage change calculation)
   const calculateTrend = (current, previous) => {
-    if (previous === 0) return { value: 0, isPositive: true };
-    const change = ((current - previous) / previous) * 100;
-    return { value: change, isPositive: change >= 0 };
+    try {
+      if (!Number.isFinite(current) || !Number.isFinite(previous)) {
+        return { value: 0, isPositive: true };
+      }
+      if (previous === 0) return { value: 0, isPositive: current >= 0 };
+      const change = ((current - previous) / previous) * 100;
+      const value = Math.round(change * 10) / 10;
+      if (!Number.isFinite(value)) return { value: 0, isPositive: true };
+      return { value, isPositive: change >= 0 };
+    } catch (error) {
+      console.warn("Error calculating trend:", error);
+      return { value: 0, isPositive: true };
+    }
   };
 
-  const vehicleTrend = calculateTrend(totalVehicles, totalVehicles - 1);
-  const driverTrend = calculateTrend(availableDrivers, availableDrivers - 1);
-  const assignmentTrend = calculateTrend(
-    activeAssignments,
-    activeAssignments - 1
-  );
-  const maintenanceTrend = calculateTrend(
-    vehiclesInMaintenance,
-    vehiclesInMaintenance + 1
-  );
-  const fuelCostTrend = calculateTrend(totalFuelCost, totalFuelCost - 50);
-  const upcomingTrend = calculateTrend(
-    upcomingMaintenance,
-    upcomingMaintenance - 1
-  );
+  // Placeholder previous values for trend - in production, fetch from backend
+  const vehicleTrend = calculateTrend(totalVehicles, totalVehicles > 0 ? totalVehicles - 1 : 3);
+  const driverTrend = calculateTrend(availableDrivers, availableDrivers > 0 ? availableDrivers + 1 : 1);
+  const assignmentTrend = calculateTrend(activeAssignments, activeAssignments > 0 ? activeAssignments - 1 : 2);
+  const maintenanceTrend = calculateTrend(vehiclesInMaintenance, vehiclesInMaintenance > 0 ? vehiclesInMaintenance - 1 : 1);
+  const fuelCostTrend = calculateTrend(totalFuelCost, totalFuelCost > 0 ? totalFuelCost - 50 : 169.25);
+  const upcomingTrend = calculateTrend(upcomingMaintenance, 1);
 
   // Handle logout
   const handleLogout = async () => {
@@ -275,8 +430,9 @@ export default function DashboardPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showUserMenu]);
 
-  return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 sm:p-6 lg:p-8 relative overflow-hidden">
+  try {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 sm:p-6 lg:p-8 relative overflow-hidden">
       {/* Decorative background blur effects */}
       <div className="absolute top-20 right-20 w-96 h-96 bg-blue-400/30 rounded-full blur-3xl animate-pulse" />
       <div
@@ -328,8 +484,8 @@ export default function DashboardPage() {
               >
                 <Calendar className="h-5 w-5 text-blue-600" />
                 <span className="text-sm text-gray-700 font-semibold">
-                  {format(startOfWeek(new Date()), "MMM dd")} –{" "}
-                  {format(endOfWeek(new Date()), "MMM dd, yyyy")}
+                  {startOfWeek(new Date()).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} –{" "}
+                  {endOfWeek(new Date()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </span>
               </motion.div>
 
@@ -438,7 +594,7 @@ export default function DashboardPage() {
             value={upcomingMaintenance}
             icon={Clock}
             trend={upcomingTrend}
-            loading={maintenanceLoading}
+            loading={upcomingMaintenanceLoading}
             warning={upcomingMaintenance > 0}
             color="purple"
           />
@@ -837,7 +993,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               {maintenanceLoading ? (
-                <div className="space-y-4">
+                <div className="space-y-4 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
                   {[1, 2, 3].map((i) => (
                     <div
                       key={i}
@@ -852,8 +1008,8 @@ export default function DashboardPage() {
                   ))}
                 </div>
               ) : maintenanceRecords && maintenanceRecords.length > 0 ? (
-                <div className="space-y-4">
-                  {maintenanceRecords.slice(0, 3).map((record) => (
+                <div className="space-y-4 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                  {maintenanceRecords.map((record) => (
                     <div
                       key={record._id}
                       className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
@@ -868,7 +1024,7 @@ export default function DashboardPage() {
                           </h4>
                           <p className="text-sm text-gray-500">
                             {record.vehicle?.plateNumber} • Due:{" "}
-                            {format(new Date(record.dueDate), "MMM dd")}
+                            {record.dueDate ? new Date(record.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A'}
                           </p>
                         </div>
                       </div>
@@ -936,7 +1092,7 @@ export default function DashboardPage() {
                       days ago.
                     </p>
                     <p className="text-xs text-red-500 mt-1">
-                      Due: {format(subDays(new Date(), 2), "MMM dd")}
+                      Due: {new Date(new Date().getTime() - 2 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </p>
                   </div>
                 </div>
@@ -949,7 +1105,7 @@ export default function DashboardPage() {
                       Vehicle XYZ-789 has low fuel level after long trip.
                     </p>
                     <p className="text-xs text-yellow-500 mt-1">
-                      Last refuel: {format(subDays(new Date(), 5), "MMM dd")}
+                      Last refuel: {new Date(new Date().getTime() - 5 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </p>
                   </div>
                 </div>
@@ -965,7 +1121,7 @@ export default function DashboardPage() {
                       efficiency.
                     </p>
                     <p className="text-xs text-blue-500 mt-1">
-                      Completed: {format(new Date(), "MMM dd, HH:mm")}
+                      Completed: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>
@@ -975,10 +1131,35 @@ export default function DashboardPage() {
         </motion.div>
       </div>
     </div>
-  );
+    );
+  } catch (error) {
+    console.error("Dashboard render error:", error);
+    return (
+      <div className="min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 sm:p-6 lg:p-8 flex items-center justify-center">
+        <Card className="bg-red-50 border-2 border-red-300 max-w-md">
+          <CardHeader>
+            <CardTitle className="text-red-800">Dashboard Error</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-red-700 mb-4">An error occurred while loading the dashboard.</p>
+            <details className="text-sm text-red-600 font-mono bg-red-100 p-3 rounded overflow-auto max-h-40">
+              <summary>Error details</summary>
+              <pre>{error?.toString()}</pre>
+            </details>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+            >
+              Reload Page
+            </button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 }
 
-function KpiCard({ title, value, icon: Icon, trend, loading, warning, color }) {
+function KpiCard({ title, value, icon: Icon, trend = { value: 0, isPositive: true }, loading, warning, color }) {
   const colorMap = {
     blue: "bg-linear-to-br from-blue-500 to-indigo-600",
     green: "bg-linear-to-br from-emerald-500 to-teal-600",
@@ -988,21 +1169,22 @@ function KpiCard({ title, value, icon: Icon, trend, loading, warning, color }) {
     purple: "bg-linear-to-br from-purple-500 to-pink-600",
   };
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ scale: 1.03, y: -5 }}
-      transition={{ duration: 0.3 }}
-      className="relative"
-    >
-      <Card
-        className={`overflow-hidden border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl relative min-h-[170px] ${
-          warning ? "ring-2 ring-red-400/50 ring-offset-2" : ""
-        }`}
+  try {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        whileHover={{ scale: 1.03, y: -5 }}
+        transition={{ duration: 0.3 }}
+        className="relative"
       >
-        {/* Decorative circle */}
-        <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
+        <Card
+          className={`overflow-hidden border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl relative min-h-[170px] ${
+            warning ? "ring-2 ring-red-400/50 ring-offset-2" : ""
+          }`}
+        >
+          {/* Decorative circle */}
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
 
         {/* Icon positioned absolutely to avoid overlap */}
         <motion.div
@@ -1059,5 +1241,17 @@ function KpiCard({ title, value, icon: Icon, trend, loading, warning, color }) {
         </CardContent>
       </Card>
     </motion.div>
-  );
+    );
+  } catch (error) {
+    console.error("Error rendering KPI card:", error);
+    return (
+      <Card className="bg-red-50 border border-red-200 rounded-2xl shadow-xl relative min-h-[170px]">
+        <CardContent className="pt-8">
+          <div className="text-center">
+            <p className="text-sm text-red-600 font-semibold">Error loading {title}</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 }
