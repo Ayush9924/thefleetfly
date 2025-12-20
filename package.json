@@ -5,9 +5,5 @@
     "build": "echo 'Build complete'",
     "start": "npm start --prefix backend"
   },
-  "workspaces": [
-    "backend",
-    "frontend"
-  ],
   "devDependencies": {}
 }
