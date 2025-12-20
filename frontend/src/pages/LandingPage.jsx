@@ -417,16 +417,45 @@ export default function LandingPage() {
                 Simplify operations, reduce costs, and maximize efficiency.
               </p>
               <div className="flex space-x-4">
-                {["twitter", "linkedin", "facebook", "instagram"].map(
-                  (social) => (
-                    <div
-                      key={social}
-                      className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-gray-700 transition-colors duration-300 cursor-pointer"
+                {[
+                  {
+                    name: "LinkedIn",
+                    url: "https://www.linkedin.com/in/aakashkumar19/",
+                    icon: "M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z",
+                  },
+                  {
+                    name: "GitHub",
+                    url: "https://github.com/Ayush9924/thefleetfly",
+                    icon: "M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.11.82-.26.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.997.107-.775.418-1.305.762-1.605-2.665-.3-5.467-1.334-5.467-5.93 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 0 1.605-.015 2.896-.015 3.286 0 .319.216.694.825.576C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12z",
+                  },
+                  {
+                    name: "Reddit",
+                    url: "https://www.reddit.com/user/Intrepid-Breath-1642/",
+                    icon: "M12 0C5.37 0 0 5.37 0 12s5.37 12 12 12 12-5.37 12-12S18.63 0 12 0zm3.29 7.28c0-.89.73-1.62 1.62-1.62s1.62.73 1.62 1.62-.73 1.62-1.62 1.62-1.62-.73-1.62-1.62zm-6 0c0-.89.73-1.62 1.62-1.62s1.62.73 1.62 1.62-.73 1.62-1.62 1.62-1.62-.73-1.62-1.62zm6 6.5c-1.25 1.35-3.5 1.84-5.29 1.84-1.79 0-4.04-.49-5.29-1.84-.2-.23.29-.63.64-.4 1.07.73 3.15 1.35 4.65 1.35s3.58-.62 4.65-1.35c.35-.23.84.17.64.4z",
+                  },
+                  {
+                    name: "YouTube",
+                    url: "https://www.youtube.com/@Fleetio",
+                    icon: "M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z",
+                  },
+                ].map((social) => (
+                  <a
+                    key={social.name}
+                    href={social.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors duration-300 group"
+                    title={social.name}
+                  >
+                    <svg
+                      className="w-5 h-5 text-white"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
                     >
-                      <div className="w-4 h-4 bg-gray-400 rounded"></div>
-                    </div>
-                  )
-                )}
+                      <path d={social.icon} />
+                    </svg>
+                  </a>
+                ))}
               </div>
             </div>
             <div>
