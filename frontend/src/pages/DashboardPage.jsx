@@ -138,27 +138,13 @@ const getMaintenance = async ({ from, to }) => {
       return [];
     }
 
-    // Filter by date range if provided
-    if (from || to) {
-      const fromDate = from ? new Date(from) : null;
-      const toDate = to ? new Date(to) : null;
-      return data.filter((record) => {
-        try {
-          const dateValue =
-            record?.date || record?.dueDate || record?.createdAt;
-          if (!dateValue) return false;
-          const recordDate = new Date(dateValue);
-          if (isNaN(recordDate.getTime())) return false;
-          if (fromDate && recordDate < fromDate) return false;
-          if (toDate && recordDate > toDate) return false;
-          return true;
-        } catch (error) {
-          console.warn("Error filtering maintenance record:", error);
-          return false;
-        }
-      });
-    }
-    return data;
+    // Sort by most recent first and return all records
+    // This way we show upcoming/scheduled maintenance even if date filter doesn't match
+    return data.sort((a, b) => {
+      const dateA = new Date(a?.dueDate || a?.createdAt || 0);
+      const dateB = new Date(b?.dueDate || b?.createdAt || 0);
+      return dateB - dateA;
+    });
   } catch (error) {
     console.error("❌ Error fetching maintenance:", error);
     return [];
