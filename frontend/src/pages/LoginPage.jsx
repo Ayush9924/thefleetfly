@@ -168,6 +168,15 @@ export default function LoginPage() {
                     </div>
                   </motion.div>
 
+                  <motion.div variants={itemVariants} className="text-right">
+                    <Link
+                      to="/forgot-password"
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                    >
+                      Forgot Password?
+                    </Link>
+                  </motion.div>
+
                   <motion.div variants={itemVariants} className="pt-4">
                     <Button
                       type="submit"

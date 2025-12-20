@@ -363,7 +363,7 @@ export default function LandingPage() {
                 </h3>
               </div>
               <p className="text-blue-100 text-lg italic">
-                "FleetPro reduced our fuel costs by 23% and improved delivery
+                "FleetFly reduced our fuel costs by 23% and improved delivery
                 efficiency by 35% in just three months."
               </p>
               <p className="text-white font-medium mt-4">
@@ -410,7 +410,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 mb-12">
             <div className="lg:col-span-2">
               <div className="text-2xl font-bold bg-linear-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent mb-4">
-                Fleet<span className="text-white">Pro</span>
+                Fleet<span className="text-white">Fly</span>
               </div>
               <p className="text-gray-400 mb-6 max-w-md">
                 The ultimate fleet management solution for modern businesses.
@@ -481,7 +481,7 @@ export default function LandingPage() {
           </div>
           <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
             <p className="text-gray-400 text-sm">
-              &copy; 2025 FleetPro. All rights reserved.
+              &copy; 2025 FleetFly. All rights reserved.
             </p>
             <div className="flex space-x-6 mt-4 md:mt-0">
               {["Privacy Policy", "Terms of Service", "Cookie Policy"].map(

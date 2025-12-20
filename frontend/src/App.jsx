@@ -11,6 +11,7 @@ import PublicLiveTracking from './pages/PublicLiveTracking'
 const LandingPage = lazy(() => import('./pages/LandingPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const SignUpPage = lazy(() => import('./pages/SignUpPage'))
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const VehiclesPage = lazy(() => import('./pages/VehiclesPage'))
 const VehicleDetailPage = lazy(() => import('./pages/VehicleDetailPage'))
@@ -57,6 +58,12 @@ function App() {
         <Route path="/signup" element={
           <PublicRoute>
             <SignUpPage />
+          </PublicRoute>
+        } />
+
+        <Route path="/forgot-password" element={
+          <PublicRoute>
+            <ForgotPasswordPage />
           </PublicRoute>
         } />
         
