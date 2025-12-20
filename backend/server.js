@@ -29,7 +29,7 @@ if (process.env.REDIS_URL) {
     io = new socketIo.Server(server, {
       cors: {
         origin: process.env.NODE_ENV === 'production' 
-          ? 'https://your-frontend-domain.com' 
+          ? [process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app']
           : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
         credentials: true,
       },
@@ -41,7 +41,7 @@ if (process.env.REDIS_URL) {
     io = new socketIo.Server(server, {
       cors: {
         origin: process.env.NODE_ENV === 'production' 
-          ? 'https://your-frontend-domain.com' 
+          ? [process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app']
           : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
         credentials: true,
       },
@@ -64,7 +64,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? 'https://your-frontend-domain.com' 
+    ? [process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app'] 
     : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
   credentials: true
 }));
