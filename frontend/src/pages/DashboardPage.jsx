@@ -153,6 +153,17 @@ const getMaintenance = async ({ from, to }) => {
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
 
+// Mock fuel cost trend data
+const MOCK_FUEL_TREND = [
+  { date: "Mon", cost: 245.5 },
+  { date: "Tue", cost: 318.75 },
+  { date: "Wed", cost: 275.25 },
+  { date: "Thu", cost: 392.0 },
+  { date: "Fri", cost: 425.5 },
+  { date: "Sat", cost: 289.75 },
+  { date: "Sun", cost: 198.5 },
+];
+
 export default function DashboardPage() {
   const [fuelData, setFuelData] = useState([]);
   const [maintenanceData, setMaintenanceData] = useState([]);
@@ -289,6 +300,9 @@ export default function DashboardPage() {
         console.error("Error processing fuel data:", error);
         setFuelData([]);
       }
+    } else {
+      // Use mock data when no real data available
+      setFuelData(MOCK_FUEL_TREND);
     }
   }, [fuelLogs]);
 
@@ -635,9 +649,9 @@ export default function DashboardPage() {
               </h2>
             </div>
 
-            {/* Scrollable Container with Controls */}
-            <div className="relative group">
-              {/* Left Scroll Button */}
+            {/* For Mobile: Grid Layout, For Desktop: Scrollable Container with Controls */}
+            <div className="hidden md:block relative group">
+              {/* Left Scroll Button - Hidden on Mobile */}
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
@@ -647,7 +661,7 @@ export default function DashboardPage() {
                 <ChevronLeft className="h-5 w-5 text-blue-600" />
               </motion.button>
 
-              {/* Right Scroll Button */}
+              {/* Right Scroll Button - Hidden on Mobile */}
               <motion.button
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
@@ -657,7 +671,7 @@ export default function DashboardPage() {
                 <ChevronRight className="h-5 w-5 text-blue-600" />
               </motion.button>
 
-              {/* Scrollable Cards Container */}
+              {/* Scrollable Cards Container - Desktop */}
               <div
                 ref={scrollContainerRef}
                 className="flex gap-6 overflow-x-hidden scroll-smooth pb-2"
@@ -815,14 +829,169 @@ export default function DashboardPage() {
                           Manage fleet vehicles with location tracking and
                           details
                         </p>
-                        <div className="flex items-center text-purple-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
-                          View Fleet <ChevronRight className="h-4 w-4" />
-                        </div>
                       </CardContent>
                     </Card>
                   </motion.div>
                 </Link>
               </div>
+            </div>
+
+            {/* Mobile Grid Layout - Visible only on Mobile */}
+            <div className="md:hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Card 1: Live Tracking */}
+              <Link
+                to="/dashboard/tracking"
+                className="no-underline"
+              >
+                <motion.div
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Card className="border border-white/20 bg-white/80 backdrop-blur-xl rounded-xl shadow-lg overflow-hidden group cursor-pointer h-full">
+                    <CardHeader className="pb-2 relative z-10">
+                      <CardTitle className="flex items-center gap-2 text-base font-bold">
+                        <div className="bg-linear-to-br from-blue-500 to-indigo-600 p-2 rounded-lg">
+                          <MapPin className="h-4 w-4 text-white" />
+                        </div>
+                        Live Tracking
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="relative z-10">
+                      <p className="text-xs text-gray-600 mb-3 leading-relaxed">
+                        Real-time tracking
+                      </p>
+                      <div className="flex items-center text-blue-600 text-xs font-semibold">
+                        View <ChevronRight className="h-3 w-3 ml-1" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </Link>
+
+              {/* Card 2: Messages */}
+              <Link
+                to="/dashboard/messages"
+                className="no-underline"
+              >
+                <motion.div
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Card className="border border-white/20 bg-white/80 backdrop-blur-xl rounded-xl shadow-lg overflow-hidden group cursor-pointer h-full">
+                    <CardHeader className="pb-2 relative z-10">
+                      <CardTitle className="flex items-center gap-2 text-base font-bold">
+                        <div className="bg-linear-to-br from-emerald-500 to-teal-600 p-2 rounded-lg">
+                          <MessageSquare className="h-4 w-4 text-white" />
+                        </div>
+                        Messages
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="relative z-10">
+                      <p className="text-xs text-gray-600 mb-3 leading-relaxed">
+                        Real-time chat
+                      </p>
+                      <div className="flex items-center text-emerald-600 text-xs font-semibold">
+                        Open <ChevronRight className="h-3 w-3 ml-1" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </Link>
+
+              {/* Card 3: Maintenance */}
+              <Link
+                to="/dashboard/maintenance"
+                className="no-underline"
+              >
+                <motion.div
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Card className="border border-white/20 bg-white/80 backdrop-blur-xl rounded-xl shadow-lg overflow-hidden group cursor-pointer h-full">
+                    <CardHeader className="pb-2 relative z-10">
+                      <CardTitle className="flex items-center gap-2 text-base font-bold">
+                        <div className="bg-linear-to-br from-orange-500 to-red-600 p-2 rounded-lg">
+                          <Wrench className="h-4 w-4 text-white" />
+                        </div>
+                        Maintenance
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="relative z-10">
+                      <p className="text-xs text-gray-600 mb-3 leading-relaxed">
+                        Track repairs
+                      </p>
+                      <div className="flex items-center text-orange-600 text-xs font-semibold">
+                        Manage <ChevronRight className="h-3 w-3 ml-1" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </Link>
+
+              {/* Card 4: Notifications */}
+              <Link
+                to="/dashboard/notifications"
+                className="no-underline"
+              >
+                <motion.div
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Card className="border border-white/20 bg-white/80 backdrop-blur-xl rounded-xl shadow-lg overflow-hidden group cursor-pointer h-full">
+                    <CardHeader className="pb-2 relative z-10">
+                      <CardTitle className="flex items-center gap-2 text-base font-bold">
+                        <div className="bg-linear-to-br from-amber-500 to-orange-600 p-2 rounded-lg">
+                          <Bell className="h-4 w-4 text-white" />
+                        </div>
+                        Notifications
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="relative z-10">
+                      <p className="text-xs text-gray-600 mb-3 leading-relaxed">
+                        Real-time alerts
+                      </p>
+                      <div className="flex items-center text-amber-600 text-xs font-semibold">
+                        View <ChevronRight className="h-3 w-3 ml-1" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </Link>
+
+              {/* Card 5: Vehicles */}
+              <Link
+                to="/dashboard/vehicles"
+                className="no-underline col-span-full sm:col-span-1"
+              >
+                <motion.div
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Card className="border border-white/20 bg-white/80 backdrop-blur-xl rounded-xl shadow-lg overflow-hidden group cursor-pointer h-full">
+                    <CardHeader className="pb-2 relative z-10">
+                      <CardTitle className="flex items-center gap-2 text-base font-bold">
+                        <div className="bg-linear-to-br from-purple-500 to-pink-600 p-2 rounded-lg">
+                          <Truck className="h-4 w-4 text-white" />
+                        </div>
+                        Vehicles
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="relative z-10">
+                      <p className="text-xs text-gray-600 mb-3 leading-relaxed">
+                        Manage fleet
+                      </p>
+                      <div className="flex items-center text-purple-600 text-xs font-semibold">
+                        View <ChevronRight className="h-3 w-3 ml-1" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </Link>
             </div>
           </motion.div>
 
@@ -835,18 +1004,25 @@ export default function DashboardPage() {
           >
             <Card className="overflow-hidden border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl">
               <CardHeader className="pb-4 bg-linear-to-r from-blue-50 to-indigo-50">
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start gap-2">
                   <div className="flex items-center gap-3">
                     <div className="bg-linear-to-br from-blue-600 to-indigo-600 p-2 rounded-lg">
                       <TrendingUp className="h-5 w-5 text-white" />
                     </div>
-                    <CardTitle className="text-xl font-bold text-gray-900">
-                      Fuel Cost Trend
-                    </CardTitle>
+                    <div>
+                      <CardTitle className="text-xl font-bold text-gray-900">
+                        Fuel Cost Trend
+                      </CardTitle>
+                      {fuelLogs && fuelLogs.length === 0 && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Sample data shown
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="h-[300px]">
+              <CardContent className="h-[250px] sm:h-[300px]">
                 {fuelLogsLoading ? (
                   <div className="flex h-full items-center justify-center">
                     <div className="text-center">
@@ -867,20 +1043,20 @@ export default function DashboardPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       data={fuelData}
-                      margin={{ top: 10, right: 10, left: 10, bottom: 10 }}
+                      margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                       <XAxis
                         dataKey="date"
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 11 }}
                         tickLine={false}
                         axisLine={false}
                       />
                       <YAxis
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 11 }}
                         tickLine={false}
                         axisLine={false}
-                        width={60}
+                        width={50}
                       />
                       <Tooltip
                         content={({ payload, label }) => (
@@ -916,7 +1092,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="h-[300px]">
+              <CardContent className="h-[250px] sm:h-[300px] flex items-center justify-center">
                 {vehiclesLoading ? (
                   <div className="flex h-full items-center justify-center">
                     <div className="text-center">
@@ -932,53 +1108,51 @@ export default function DashboardPage() {
                     <p className="text-sm font-medium">No vehicles added</p>
                   </div>
                 ) : (
-                  <div className="flex h-full items-center justify-center">
-                    <PieChart width={250} height={250}>
-                      <Pie
-                        data={vehicleStatusData}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={90}
-                        innerRadius={60}
-                        dataKey="value"
-                        cornerRadius={10}
-                      >
-                        {vehicleStatusData.map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={
-                              entry.name === "Active"
-                                ? "#10b981"
-                                : entry.name === "Maintenance"
-                                ? "#f59e0b"
-                                : "#2563eb"
-                            }
-                            stroke="white"
-                            strokeWidth={2}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        content={({ payload }) => (
-                          <div className="bg-white p-3 rounded-lg shadow-md border border-gray-200">
-                            <p className="text-sm font-medium">
-                              {payload?.[0]?.name}
-                            </p>
-                            <p className="text-sm text-blue-600 font-semibold">
-                              {payload?.[0]?.value} vehicles
-                            </p>
-                          </div>
-                        )}
-                      />
-                      <Legend
-                        formatter={(value) => (
-                          <span className="text-sm text-gray-700">{value}</span>
-                        )}
-                        verticalAlign="bottom"
-                        height={36}
-                      />
-                    </PieChart>
-                  </div>
+                  <PieChart width={220} height={220} className="mx-auto">
+                    <Pie
+                      data={vehicleStatusData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={70}
+                      innerRadius={45}
+                      dataKey="value"
+                      cornerRadius={8}
+                    >
+                      {vehicleStatusData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={
+                            entry.name === "Active"
+                              ? "#10b981"
+                              : entry.name === "Maintenance"
+                              ? "#f59e0b"
+                              : "#2563eb"
+                          }
+                          stroke="white"
+                          strokeWidth={2}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      content={({ payload }) => (
+                        <div className="bg-white p-3 rounded-lg shadow-md border border-gray-200">
+                          <p className="text-sm font-medium">
+                            {payload?.[0]?.name}
+                          </p>
+                          <p className="text-sm text-blue-600 font-semibold">
+                            {payload?.[0]?.value} vehicles
+                          </p>
+                        </div>
+                      )}
+                    />
+                    <Legend
+                      formatter={(value) => (
+                        <span className="text-xs sm:text-sm text-gray-700">{value}</span>
+                      )}
+                      verticalAlign="bottom"
+                      height={30}
+                    />
+                  </PieChart>
                 )}
               </CardContent>
             </Card>
