@@ -1,26 +1,11 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
-// Create a function to get transporter (evaluates env vars at runtime)
-const getTransporter = () => {
-    return nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT),
-        secure: false,
-        auth: {
-            user: process.env.SMTP_USER,
-            pass: process.env.SMTP_PASS
-        },
-        connectionTimeout: 10000,
-        socketTimeout: 10000,
-        logger: false,
-        debug: false
-    });
-};
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const sendOTPEmail = async (email, otp, name) => {
     try {
-        const mailOptions = {
-            from: `"FleetFly" <${process.env.SMTP_USER}>`,
+        const response = await resend.emails.send({
+            from: 'FleetFly <onboarding@resend.dev>',
             to: email,
             subject: 'Password Reset OTP - FleetFly',
             html: `
@@ -91,18 +76,17 @@ const sendOTPEmail = async (email, otp, name) => {
                 </body>
                 </html>
             `
-        };
+        });
 
-        const info = await getTransporter().sendMail(mailOptions);
-        console.log('✅ Email sent: ', info.messageId);
-        return true;
+        if (response.id) {
+            console.log('✅ Email sent via Resend:', response.id);
+            return true;
+        } else {
+            console.error('❌ Resend error:', response.error);
+            return false;
+        }
     } catch (error) {
         console.error('❌ Error sending email:', error.message);
-        console.error('SMTP Config:', {
-            host: process.env.SMTP_HOST,
-            port: process.env.SMTP_PORT,
-            user: process.env.SMTP_USER ? '***' : 'not set'
-        });
         return false;
     }
 };
