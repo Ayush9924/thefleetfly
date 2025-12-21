@@ -829,6 +829,9 @@ export default function DashboardPage() {
                           Manage fleet vehicles with location tracking and
                           details
                         </p>
+                        <div className="flex items-center text-purple-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
+                          View Fleet <ChevronRight className="h-4 w-4" />
+                        </div>
                       </CardContent>
                     </Card>
                   </motion.div>
