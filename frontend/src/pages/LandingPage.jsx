@@ -92,7 +92,7 @@ export default function LandingPage() {
                 whileTap={{ scale: 0.98 }}
               >
                 <Button
-                  onClick={() => window.open("https://www.linkedin.com/feed/update/urn:li:activity:7408532295319511042/?commentUrn=urn%3Ali%3Acomment%3A(ugcPost%3A7408531823082795008%2C7408566823652290561)&dashCommentUrn=urn%3Ali%3Afsd_comment%3A(7408566823652290561%2Curn%3Ali%3AugcPost%3A7408531823082795008)", "_blank")}
+                  onClick={() => window.open("https://www.linkedin.com/posts/aakashkumar19_project-showcase-thefleetfly-fleet-ugcPost-7408531823082795008-ZOTo?utm_source=social_share_send&utm_medium=member_desktop_web&rcm=ACoAAEgLJ9QBaeRiEpodc2jxoeX_NKw_1pHyWf4", "_blank")}
                   variant="outline"
                   className="border-gray-300 text-gray-700 px-8 py-4 text-lg font-semibold hover:bg-gray-50 hover:border-gray-400 transition-all duration-300"
                 >

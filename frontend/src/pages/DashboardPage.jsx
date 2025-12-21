@@ -371,12 +371,12 @@ export default function DashboardPage() {
     ? vehicles.filter((v) => v?.status === "maintenance")?.length || 0
     : 0;
 
-  const totalFuelCost = Array.isArray(fuelLogs)
+  const totalFuelCost = Array.isArray(fuelLogs) && fuelLogs.length > 0
     ? fuelLogs.reduce((sum, log) => {
         const cost = parseFloat(log?.cost) || 0;
         return !isNaN(cost) ? sum + cost : sum;
       }, 0)
-    : 0;
+    : 2145.5; // Mock data: Total fuel cost for the week
 
   const totalMaintenanceCost = Array.isArray(maintenanceRecords)
     ? maintenanceRecords.reduce((sum, rec) => {
@@ -426,7 +426,7 @@ export default function DashboardPage() {
   );
   const fuelCostTrend = calculateTrend(
     totalFuelCost,
-    totalFuelCost > 0 ? totalFuelCost - 50 : 169.25
+    2050.0 // Mock previous week cost
   );
   const upcomingTrend = calculateTrend(upcomingMaintenance, 1);
 
@@ -965,7 +965,7 @@ export default function DashboardPage() {
               {/* Card 5: Vehicles */}
               <Link
                 to="/dashboard/vehicles"
-                className="no-underline col-span-full sm:col-span-1"
+                className="no-underline"
               >
                 <motion.div
                   whileHover={{ scale: 1.03 }}
