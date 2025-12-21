@@ -20,12 +20,16 @@ const protect = async (req, res, next) => {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      // Try to get user from MongoDB
+      // Try to get user from MongoDB with timeout
       try {
-        req.user = await User.findById(decoded.id).select('-password');
+        const userPromise = User.findById(decoded.id).select('-password');
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('User lookup timeout')), 5000)
+        );
+        req.user = await Promise.race([userPromise, timeoutPromise]);
       } catch (dbError) {
-        // MongoDB failed, use dev cache
-        console.warn('⚠️  Using development mode user cache');
+        // MongoDB failed or timed out, use dev cache
+        console.warn('⚠️  MongoDB user lookup failed, using development mode cache:', dbError.message);
         req.user = devUserCache[decoded.id] || { _id: decoded.id, role: 'user' };
       }
 

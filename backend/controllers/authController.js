@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const OTP = require('../models/OTP');
+const { sendOTPEmail, sendPasswordChangedEmail } = require('../utils/mailer');
 
 // Development mode: In-memory users storage
 const devUsers = {
@@ -219,13 +221,287 @@ const login = async (req, res) => {
 // @route   GET /api/auth/me
 const getMe = (req, res) => {
   res.json({
-    user: {
-      _id: req.user._id,
-      name: req.user.name,
-      email: req.user.email,
-      role: req.user.role
-    }
+    _id: req.user._id,
+    name: req.user.name,
+    email: req.user.email,
+    role: req.user.role
   });
 };
 
-module.exports = { register, login, getMe };
+// Generate 6-digit OTP
+const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// @desc    Request password reset (send OTP)
+// @route   POST /api/auth/forgot-password
+const requestPasswordReset = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide an email address'
+      });
+    }
+
+    // Find user by email
+    let user = null;
+    
+    try {
+      user = await User.findOne({ email: email.toLowerCase() });
+    } catch (dbError) {
+      console.log('⚠️  MongoDB unavailable, using development mode');
+    }
+
+    // Check in dev mode if MongoDB not available
+    if (!user && devUsers[email]) {
+      user = { name: devUsers[email].name, email: devUsers[email].email };
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Generate OTP
+    const otp = generateOTP();
+
+    try {
+      // Delete any existing OTP for this email
+      await OTP.deleteMany({ email: email.toLowerCase(), type: 'password-reset' });
+
+      // Save OTP to database
+      const otpRecord = new OTP({
+        email: email.toLowerCase(),
+        otp: otp,
+        type: 'password-reset'
+      });
+      await otpRecord.save();
+    } catch (dbError) {
+      console.log('⚠️  Could not save OTP to database:', dbError.message);
+      // Continue anyway, email will be sent
+    }
+
+    // Send OTP via email
+    const emailSent = await sendOTPEmail(email, otp, user.name);
+    
+    if (!emailSent) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send OTP email. Please check email configuration.'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'OTP sent successfully to your email',
+      email: email
+    });
+
+  } catch (error) {
+    console.error('Error in requestPasswordReset:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Verify OTP
+// @route   POST /api/auth/verify-otp
+const verifyOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide email and OTP'
+      });
+    }
+
+    // Find OTP record
+    let otpRecord = null;
+    
+    try {
+      otpRecord = await OTP.findOne({
+        email: email.toLowerCase(),
+        otp: otp,
+        type: 'password-reset'
+      });
+    } catch (dbError) {
+      console.log('⚠️  Could not verify OTP from database');
+    }
+
+    if (!otpRecord) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired OTP'
+      });
+    }
+
+    // Check if OTP is expired
+    if (otpRecord.expiresAt < new Date()) {
+      try {
+        await otpRecord.deleteOne();
+      } catch (err) {
+        console.log('Could not delete expired OTP');
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'OTP has expired'
+      });
+    }
+
+    // Delete the used OTP
+    try {
+      await otpRecord.deleteOne();
+    } catch (err) {
+      console.log('Could not delete OTP after verification');
+    }
+
+    // Generate a reset token
+    const resetToken = Buffer.from(`${email}:${Date.now()}`).toString('base64');
+
+    // Store reset token in user document
+    try {
+      await User.findOneAndUpdate(
+        { email: email.toLowerCase() },
+        {
+          resetPasswordToken: resetToken,
+          resetPasswordExpires: new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
+        }
+      );
+    } catch (dbError) {
+      console.log('⚠️  Could not store reset token in database');
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'OTP verified successfully',
+      resetToken: resetToken,
+      email: email
+    });
+
+  } catch (error) {
+    console.error('Error in verifyOTP:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Reset password
+// @route   POST /api/auth/reset-password
+const resetPassword = async (req, res) => {
+  try {
+    const { email, resetToken, newPassword, confirmPassword } = req.body;
+
+    // Validate inputs
+    if (!email || !resetToken || !newPassword || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide all required fields'
+      });
+    }
+
+    // Validate passwords
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Passwords do not match'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long'
+      });
+    }
+
+    // Find user and validate reset token
+    let user = null;
+    let useDevMode = false;
+
+    try {
+      user = await User.findOne({
+        email: email.toLowerCase(),
+        resetPasswordToken: resetToken,
+        resetPasswordExpires: { $gt: new Date() }
+      });
+    } catch (dbError) {
+      console.log('⚠️  MongoDB unavailable, using development mode');
+      useDevMode = true;
+    }
+
+    if (!user) {
+      if (!useDevMode) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid or expired reset token'
+        });
+      }
+      
+      // Check in dev mode
+      const devUser = devUsers[email];
+      if (devUser) {
+        // Update dev mode user password
+        devUser.password = newPassword;
+        
+        // Send confirmation email
+        await sendPasswordChangedEmail(email, devUser.name);
+
+        return res.status(200).json({
+          success: true,
+          message: 'Password reset successfully'
+        });
+      }
+
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset token'
+      });
+    }
+
+    // Check if new password is same as old password
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    if (isSamePassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password cannot be same as old password'
+      });
+    }
+
+    // Update password
+    user.password = newPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    // Send confirmation email
+    await sendPasswordChangedEmail(email, user.name);
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successfully'
+    });
+
+  } catch (error) {
+    console.error('Error in resetPassword:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+module.exports = { register, login, getMe, requestPasswordReset, verifyOTP, resetPassword };

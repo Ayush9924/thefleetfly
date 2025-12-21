@@ -29,7 +29,11 @@ if (process.env.REDIS_URL) {
     io = new socketIo.Server(server, {
       cors: {
         origin: process.env.NODE_ENV === 'production' 
-          ? 'https://your-frontend-domain.com' 
+          ? [
+              process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
+              'https://thefleetfly.xyz',
+              'https://www.thefleetfly.xyz'
+            ]
           : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
         credentials: true,
       },
@@ -41,7 +45,11 @@ if (process.env.REDIS_URL) {
     io = new socketIo.Server(server, {
       cors: {
         origin: process.env.NODE_ENV === 'production' 
-          ? 'https://your-frontend-domain.com' 
+          ? [
+              process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
+              'https://thefleetfly.xyz',
+              'https://www.thefleetfly.xyz'
+            ]
           : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
         credentials: true,
       },
@@ -51,7 +59,11 @@ if (process.env.REDIS_URL) {
   io = new socketIo.Server(server, {
     cors: {
       origin: process.env.NODE_ENV === 'production' 
-        ? 'https://your-frontend-domain.com' 
+        ? [
+            process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
+            'https://thefleetfly.xyz',
+            'https://www.thefleetfly.xyz'
+          ]
         : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
       credentials: true,
     },
@@ -64,7 +76,11 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? 'https://your-frontend-domain.com' 
+    ? [
+        process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
+        'https://thefleetfly.xyz',
+        'https://www.thefleetfly.xyz'
+      ]
     : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
   credentials: true
 }));
@@ -76,6 +92,24 @@ app.get('/', (req, res) => {
     message: 'Fleet Management API',
     status: 'running',
     version: '1.0.0'
+  });
+});
+
+// Database health check endpoint
+app.get('/api/health', (req, res) => {
+  const mongoose = require('mongoose');
+  const dbStatus = mongoose.connection.readyState;
+  const statuses = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+  
+  res.json({
+    status: 'running',
+    database: statuses[dbStatus],
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -100,14 +134,8 @@ const craBuild = path.join(__dirname, '..', 'frontend', 'build');
 
 if (fs.existsSync(viteDist)) {
   app.use(express.static(viteDist));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(viteDist, 'index.html'));
-  });
 } else if (fs.existsSync(craBuild)) {
   app.use(express.static(craBuild));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(craBuild, 'index.html'));
-  });
 }
 
 // Socket.io Authentication & Event Handler Setup
@@ -128,6 +156,19 @@ initializeMaintenanceCrons();
 
 // Error handling middleware (must be last)
 app.use(errorHandler);
+
+// Catch-all route for frontend (must be after all other routes and middleware)
+app.use((req, res) => {
+  const indexFile = fs.existsSync(viteDist) 
+    ? path.join(viteDist, 'index.html')
+    : path.join(craBuild, 'index.html');
+  
+  if (fs.existsSync(indexFile)) {
+    res.sendFile(indexFile);
+  } else {
+    res.status(404).json({ error: 'Not Found' });
+  }
+});
 
 // Use env PORT or 5000
 const PORT = process.env.PORT || 5001;

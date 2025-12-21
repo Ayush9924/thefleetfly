@@ -32,6 +32,13 @@ export default function MaintenancePage() {
     fetchVehicles();
     fetchAllData();
     fetchLocations();
+
+    // Auto-refetch maintenance data every 10 seconds
+    const refetchInterval = setInterval(() => {
+      fetchAllData();
+    }, 10000);
+
+    return () => clearInterval(refetchInterval);
   }, []);
 
   // Refetch locations when map tab is active
@@ -43,10 +50,18 @@ export default function MaintenancePage() {
     }
   }, [activeTab]);
 
+  // Refetch data when switching to upcoming/overdue tabs
+  useEffect(() => {
+    if (activeTab === 'upcoming' || activeTab === 'overdue') {
+      fetchAllData();
+    }
+  }, [activeTab]);
+
   const fetchVehicles = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/vehicles', {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+      const response = await fetch(`${baseUrl}/vehicles`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.ok) {

@@ -2,7 +2,7 @@
 import { io } from 'socket.io-client';
 
 // Prefer dedicated socket URL; fallback to API URL without trailing '/api'
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 const socketUrl = import.meta.env.VITE_SOCKET_URL || apiUrl.replace(/\/?api\/?$/, '');
 
 let socketInstance = null;

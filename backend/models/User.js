@@ -23,7 +23,9 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ['admin', 'manager', 'mechanic', 'driver'],
     default: 'manager'
-  }
+  },
+  resetPasswordToken: String,
+  resetPasswordExpires: Date
 }, {
   timestamps: true
 });

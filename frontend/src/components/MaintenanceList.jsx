@@ -33,32 +33,32 @@ export function MaintenanceList({
   const getPriorityColor = (priority) => {
     switch (priority) {
       case 'critical':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-200 text-red-900';
       case 'high':
-        return 'bg-orange-100 text-orange-800';
+        return 'bg-orange-200 text-orange-900';
       case 'medium':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-200 text-yellow-900';
       case 'low':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-200 text-green-900';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-200 text-gray-900';
     }
   };
 
   const getStatusColor = (status) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-200 text-green-900';
       case 'overdue':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-200 text-red-900';
       case 'scheduled':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-blue-200 text-blue-900';
       case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-200 text-yellow-900';
       case 'cancelled':
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-200 text-gray-900';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-200 text-gray-900';
     }
   };
 
@@ -78,81 +78,54 @@ export function MaintenanceList({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {items.map(item => {
-        const daysOverdue = getDaysOverdue(item.nextScheduledDate);
+        const daysOverdue = getDaysOverdue(item.dueDate);
         const isOverdue = item.status === 'overdue' || daysOverdue > 0;
 
         return (
           <div
             key={item._id}
-            className={`p-4 rounded-lg border-2 transition ${
+            className={`p-4 rounded-lg border-l-4 transition ${
               isOverdue
-                ? 'border-red-200 bg-red-50'
-                : 'border-gray-200 bg-white hover:border-blue-300'
+                ? 'border-l-red-500 border border-red-200 bg-red-50'
+                : 'border-l-blue-500 border border-gray-200 bg-white hover:shadow-md'
             }`}
           >
             <div className="flex items-start justify-between gap-4">
-              {/* Left Section: Icon and Main Info */}
-              <div className="flex items-start gap-3 flex-1 min-w-0">
+              <div className="flex items-start gap-3 flex-1">
                 {getStatusIcon(item.status)}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-semibold text-gray-900 truncate">
+                <div className="flex-1">
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <h3 className="font-semibold text-gray-900">
                       {item.vehicle?.plateNumber || 'Unknown Vehicle'} - {item.description}
                     </h3>
-                    <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${getPriorityColor(item.priority)}`}>
+                  </div>
+
+                  <div className="mt-2 flex items-center gap-3 flex-wrap">
+                    <span className={`inline-block px-3 py-1 rounded text-xs font-medium ${getPriorityColor(item.priority)}`}>
                       {item.priority}
                     </span>
-                    <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${getStatusColor(item.status)}`}>
+                    <span className={`inline-block px-3 py-1 rounded text-xs font-medium ${getStatusColor(item.status)}`}>
                       {item.status}
                     </span>
                   </div>
 
-                  <div className="mt-2 flex items-center gap-4 flex-wrap text-sm text-gray-600">
-                    {item.nextScheduledDate && (
-                      <div>
-                        <span className="font-medium">Scheduled:</span> {formatDate(item.nextScheduledDate)}
-                        {isOverdue && <span className="text-red-600 font-medium ml-1">({daysOverdue}d overdue)</span>}
-                      </div>
-                    )}
+                  <div className="mt-3 text-sm text-gray-600 space-y-1">
                     {item.maintenanceType && (
                       <div>
-                        <span className="font-medium">Type:</span> {item.maintenanceType}
+                        <span className="font-medium text-gray-700">Type:</span> {item.maintenanceType}
                       </div>
                     )}
                     {item.estimatedDuration && (
                       <div>
-                        <span className="font-medium">Duration:</span> {item.estimatedDuration}h
+                        <span className="font-medium text-gray-700">Duration:</span> {item.estimatedDuration}h
                       </div>
                     )}
-                  </div>
-
-                  {item.notes && (
-                    <p className="mt-2 text-sm text-gray-600 line-clamp-2">{item.notes}</p>
-                  )}
-
-                  <div className="mt-2 text-sm">
-                    <span className="font-medium text-gray-700">Cost: </span>
-                    <span className="text-gray-900 font-semibold">${item.cost.toFixed(2)}</span>
-                  </div>
-
-                  {/* Location Status (if available) */}
-                  {item.vehicle?.lastLocation && (
-                    <div className="mt-3 bg-blue-50 rounded-lg p-2.5 border border-blue-100">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <MapPin className="w-4 h-4 text-blue-600" />
-                        <span className="text-xs font-semibold text-blue-900">Location Status</span>
-                      </div>
-                      <div className="text-xs text-blue-800 space-y-0.5">
-                        <p>📍 {item.vehicle.lastLocation.address || 'Location tracking active'}</p>
-                        <div className="flex items-center justify-between">
-                          <span>{item.vehicle.lastLocation.speed > 0 ? `🟢 Moving ${item.vehicle.lastLocation.speed.toFixed(1)} km/h` : '🟡 Parked'}</span>
-                          <span className="text-blue-600">Last: {item.vehicle.lastLocation.timestamp ? new Date(item.vehicle.lastLocation.timestamp).toLocaleTimeString() : 'N/A'}</span>
-                        </div>
-                      </div>
+                    <div>
+                      <span className="font-medium text-gray-700">Cost:</span> ${item.cost.toFixed(2)}
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
 
@@ -167,7 +140,6 @@ export function MaintenanceList({
                       title="Mark as complete"
                     >
                       <Check className="w-4 h-4" />
-                      <span className="text-xs font-medium">Complete</span>
                     </button>
                     <button
                       onClick={() => onCancel(item._id)}
@@ -176,7 +148,6 @@ export function MaintenanceList({
                       title="Cancel maintenance"
                     >
                       <Trash2 className="w-4 h-4" />
-                      <span className="text-xs font-medium">Cancel</span>
                     </button>
                   </>
                 )}

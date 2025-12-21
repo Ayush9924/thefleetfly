@@ -16,15 +16,18 @@ connectDB();
 
 const seed = async () => {
   try {
-    // Clear existing data
-    await User.deleteMany();
-    await Vehicle.deleteMany();
-    await Driver.deleteMany();
-    await Assignment.deleteMany();
-    await FuelLog.deleteMany();
-    await Maintenance.deleteMany();
+    // Check if data already exists
+    const userCount = await User.countDocuments();
+    const vehicleCount = await Vehicle.countDocuments();
+    const driverCount = await Driver.countDocuments();
 
-    console.log('Database cleared...');
+    if (userCount > 0 || vehicleCount > 0 || driverCount > 0) {
+      console.log('⚠️  Database already has data. Skipping seed to preserve existing data.');
+      console.log(`   Users: ${userCount}, Vehicles: ${vehicleCount}, Drivers: ${driverCount}`);
+      process.exit(0);
+    }
+
+    console.log('Seeding database with initial data...');
 
     // Create admin user (password will be hashed by User model pre-hook)
     const admin = await User.create({
@@ -79,6 +82,79 @@ const seed = async () => {
     }
 
     console.log('Assignments created...');
+
+    // Create maintenance records
+    const maintenanceData = [
+      {
+        vehicle: vehicles[0]._id,
+        description: 'oil change',
+        cost: 19.69,
+        status: 'scheduled',
+        isScheduled: true,
+        scheduleType: 'one-time',
+        nextScheduledDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        scheduledDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        estimatedDuration: 2,
+        priority: 'high',
+        maintenanceType: 'routine'
+      },
+      {
+        vehicle: vehicles[1]._id,
+        description: 'Battery replacement',
+        cost: 120.00,
+        status: 'scheduled',
+        isScheduled: true,
+        scheduleType: 'one-time',
+        nextScheduledDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        scheduledDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        estimatedDuration: 1,
+        priority: 'medium',
+        maintenanceType: 'routine'
+      },
+      {
+        vehicle: vehicles[2]._id,
+        description: 'Engine inspection',
+        cost: 180.00,
+        status: 'scheduled',
+        isScheduled: true,
+        scheduleType: 'one-time',
+        nextScheduledDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        scheduledDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        estimatedDuration: 3,
+        priority: 'medium',
+        maintenanceType: 'routine'
+      },
+      {
+        vehicle: vehicles[3]._id,
+        description: 'Tire rotation and alignment',
+        cost: 200.00,
+        status: 'scheduled',
+        isScheduled: true,
+        scheduleType: 'one-time',
+        nextScheduledDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+        scheduledDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+        estimatedDuration: 1.5,
+        priority: 'medium',
+        maintenanceType: 'routine'
+      },
+      {
+        vehicle: vehicles[4]._id,
+        description: 'Brake pad replacement',
+        cost: 250.00,
+        status: 'pending',
+        isScheduled: false,
+        nextScheduledDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+        estimatedDuration: 2,
+        priority: 'medium',
+        maintenanceType: 'routine'
+      }
+    ];
+
+    for (const maintenance of maintenanceData) {
+      await Maintenance.create(maintenance);
+    }
+
+    console.log('Maintenance records created...');
 
     console.log('Database seeded successfully!');
     process.exit();

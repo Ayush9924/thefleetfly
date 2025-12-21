@@ -3,7 +3,8 @@
  */
 export const getVehicleLocation = async (vehicleId) => {
   try {
-    const response = await fetch(`/api/location/vehicle/${vehicleId}/latest`, {
+    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+    const response = await fetch(`${baseUrl}/location/vehicle/${vehicleId}/latest`, {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token')}`
       }
@@ -21,7 +22,8 @@ export const getVehicleLocation = async (vehicleId) => {
  */
 export const getAllVehiclesLocations = async () => {
   try {
-    const response = await fetch('/api/location/vehicles/latest', {
+    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+    const response = await fetch(`${baseUrl}/location/vehicles/latest`, {
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token')}`
       }

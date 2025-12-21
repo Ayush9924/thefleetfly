@@ -156,18 +156,35 @@ const createScheduledMaintenance = async (maintenanceData) => {
  */
 const getUpcomingScheduledMaintenance = async (daysAhead = 30) => {
   const today = new Date();
-  const futureDate = new Date();
+  today.setHours(0, 0, 0, 0); // Start of today
+  
+  const futureDate = new Date(today);
   futureDate.setDate(futureDate.getDate() + daysAhead);
+  futureDate.setHours(23, 59, 59, 999); // End of future date
 
   return await Maintenance.find({
     status: 'scheduled',
-    nextScheduledDate: {
-      $gte: today,
-      $lte: futureDate
-    }
+    isScheduled: true,
+    // For one-time maintenance, check scheduledDate. For recurring, check nextScheduledDate
+    $or: [
+      {
+        scheduleType: 'one-time',
+        scheduledDate: {
+          $gte: today,
+          $lte: futureDate
+        }
+      },
+      {
+        scheduleType: 'recurring',
+        nextScheduledDate: {
+          $gte: today,
+          $lte: futureDate
+        }
+      }
+    ]
   })
   .populate('vehicle', 'plateNumber make model')
-  .sort({ nextScheduledDate: 1 });
+  .sort({ scheduledDate: 1, nextScheduledDate: 1 });
 };
 
 /**
@@ -176,13 +193,28 @@ const getUpcomingScheduledMaintenance = async (daysAhead = 30) => {
  */
 const getOverdueScheduledMaintenance = async () => {
   const today = new Date();
+  today.setHours(0, 0, 0, 0); // Reset to start of day
 
   return await Maintenance.find({
-    status: 'scheduled',
-    nextScheduledDate: { $lt: today }
+    isScheduled: true,
+    $or: [
+      {
+        status: 'scheduled',
+        scheduleType: 'one-time',
+        scheduledDate: { $lt: today }
+      },
+      {
+        status: 'scheduled',
+        scheduleType: 'recurring',
+        nextScheduledDate: { $lt: today }
+      },
+      {
+        status: 'overdue'
+      }
+    ]
   })
   .populate('vehicle', 'plateNumber make model')
-  .sort({ nextScheduledDate: 1 });
+  .sort({ scheduledDate: 1, nextScheduledDate: 1 });
 };
 
 /**
@@ -349,7 +381,8 @@ const getMaintenanceStats = async (vehicleId = null) => {
     totalPending,
     totalCancelled,
     upcomingCount,
-    avgResult
+    avgResult,
+    totalRecords
   ] = await Promise.all([
     Maintenance.countDocuments({ ...query, status: 'scheduled' }),
     Maintenance.countDocuments({ ...query, status: 'completed' }),
@@ -364,9 +397,10 @@ const getMaintenanceStats = async (vehicleId = null) => {
       }
     }),
     Maintenance.aggregate([
-      { $match: { ...query, status: 'completed', cost: { $ne: null } } },
+      { $match: { ...query, cost: { $ne: null, $gt: 0 } } },
       { $group: { _id: null, avgCost: { $avg: '$cost' } } }
-    ])
+    ]),
+    Maintenance.countDocuments(query)
   ]);
 
   return {
@@ -375,6 +409,7 @@ const getMaintenanceStats = async (vehicleId = null) => {
     totalPending,
     totalCancelled,
     upcomingCount,
+    totalRecords,
     averageCost: avgResult[0]?.avgCost || 0
   };
 };

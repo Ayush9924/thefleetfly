@@ -1,0 +1,9 @@
+{
+  "name": "fleet-app",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "echo 'Build complete'",
+    "start": "npm start --prefix backend"
+  },
+  "devDependencies": {}
+}
