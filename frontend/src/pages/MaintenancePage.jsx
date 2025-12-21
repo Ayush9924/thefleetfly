@@ -60,7 +60,8 @@ export default function MaintenancePage() {
   const fetchVehicles = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/vehicles', {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+      const response = await fetch(`${baseUrl}/vehicles`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.ok) {
