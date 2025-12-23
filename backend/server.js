@@ -18,6 +18,25 @@ const server = http.createServer(app);
 // Socket.io setup - Initialize immediately
 let io;
 
+// Define socket initialization function BEFORE using it
+const initializeInMemorySocket = () => {
+  io = new socketIo.Server(server, {
+    cors: {
+      origin: process.env.NODE_ENV === 'production' 
+        ? [
+            process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
+            'https://thefleetfly.xyz',
+            'https://www.thefleetfly.xyz'
+          ]
+        : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
+      credentials: true,
+    },
+    transports: ['websocket', 'polling'],
+  });
+  console.log('✅ Socket.io initialized in development mode');
+};
+
+// Initialize Socket.io
 if (process.env.REDIS_URL) {
   const { createAdapter } = require('@socket.io/redis-adapter');
   const { createClient } = require('redis');
@@ -48,23 +67,6 @@ if (process.env.REDIS_URL) {
 } else {
   initializeInMemorySocket();
 }
-
-const initializeInMemorySocket = () => {
-  io = new socketIo.Server(server, {
-    cors: {
-      origin: process.env.NODE_ENV === 'production' 
-        ? [
-            process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
-            'https://thefleetfly.xyz',
-            'https://www.thefleetfly.xyz'
-          ]
-        : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
-      credentials: true,
-    },
-    transports: ['websocket', 'polling'],
-  });
-  console.log('✅ Socket.io initialized in development mode');
-};
 
 // Middleware
 app.use(express.json({ limit: '10mb' }));
