@@ -11,6 +11,7 @@ const onlineUsers = new Map(); // userId -> { socketId, userName, userRole, conn
 // Import models for persistence
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
+const User = require('../models/User');
 
 /**
  * Initialize all Socket.io event handlers
@@ -314,17 +315,66 @@ const socketService = (io) => {
         }
 
         // Get conversation to find recipient
-        const conversation = await Conversation.findOne({ conversationId });
+        let conversation = await Conversation.findOne({ conversationId });
+        
         if (!conversation) {
-          console.error('❌ Conversation not found:', { conversationId, searchedFormat: conversationId });
-          console.error('❌ Available conversations in DB:', await Conversation.find().limit(5).select('conversationId'));
-          socket.emit('error', 'Conversation not found');
-          return;
+          console.warn(`⚠️  Conversation not found, attempting to create: ${conversationId}`);
+          
+          // Try to create conversation if it doesn't exist
+          // Parse conversation ID to extract user IDs: direct-{id1}-{id2}
+          const idParts = conversationId.split('-');
+          if (idParts.length >= 3) {
+            const [, id1, id2] = idParts;
+            
+            try {
+              const user1 = await User.findById(id1).select('name email role');
+              const user2 = await User.findById(id2).select('name email role');
+              
+              if (user1 && user2) {
+                conversation = new Conversation({
+                  conversationId,
+                  type: 'direct',
+                  participants: [
+                    {
+                      userId: id1,
+                      userName: user1.name,
+                      userRole: user1.role,
+                    },
+                    {
+                      userId: id2,
+                      userName: user2.name,
+                      userRole: user2.role,
+                    },
+                  ],
+                });
+                await conversation.save();
+                console.log(`✅ Conversation created on-the-fly:`, conversationId);
+              } else {
+                console.error('❌ Could not find users for conversation creation:', { id1, id2 });
+                socket.emit('error', 'Invalid conversation participants');
+                return;
+              }
+            } catch (createError) {
+              console.error('❌ Failed to create conversation:', createError.message);
+              socket.emit('error', 'Could not create or find conversation');
+              return;
+            }
+          } else {
+            console.error('❌ Invalid conversation ID format:', conversationId);
+            socket.emit('error', 'Invalid conversation ID format');
+            return;
+          }
         }
 
         // Find recipient (the other participant)
         const recipient = conversation.participants.find(p => String(p.userId) !== String(userId));
         const recipientId = recipient?.userId;
+
+        if (!recipientId) {
+          console.error('❌ Could not find recipient in conversation:', { conversationId, participants: conversation.participants });
+          socket.emit('error', 'Could not find message recipient');
+          return;
+        }
 
         console.log(`✉️  Message details:`, { senderId: userId, senderName: socket.userName, recipientId, conversationId });
 
