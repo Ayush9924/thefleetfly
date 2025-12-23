@@ -172,20 +172,25 @@ export const useSocketChat = () => {
       )
     }
 
-    // Register listeners - only once when socket is available, NOT on activeConversation change
-    console.log('📡 Registering message listener for socket:', socket?.id)
+    // Register listeners - must include activeConversation so handlers always have latest value
+    if (!socket) {
+      console.warn('⚠️  Socket not available, skipping listener registration')
+      return () => {}
+    }
+
+    console.log('📡 Registering message listener for socket:', socket.id)
     socket.on('chat:receive_message', handleReceiveMessage)
     socket.on('chat:user_typing', handleTyping)
     socket.on('chat:conversation_read', handleConversationRead)
 
     // Cleanup: Remove listeners
     return () => {
-      console.log('🧹 Removing message listener for socket:', socket?.id)
+      console.log('🧹 Removing message listener for socket:', socket.id)
       socket.off('chat:receive_message', handleReceiveMessage)
       socket.off('chat:user_typing', handleTyping)
       socket.off('chat:conversation_read', handleConversationRead)
     }
-  }, [socket])
+  }, [socket, activeConversation])
 
   /**
    * Send a message
