@@ -11,9 +11,10 @@ let socketInstance = null;
 
 export const initSocket = (token) => {
   // Disconnect old socket if exists
-  if (socketInstance && socketInstance.connected) {
-    console.log('🔌 Disconnecting old socket...');
+  if (socketInstance) {
+    console.log('🔌 Disconnecting existing socket instance...');
     socketInstance.disconnect();
+    socketInstance = null;
   }
 
   if (!token) {
@@ -21,7 +22,7 @@ export const initSocket = (token) => {
     return null;
   }
 
-  // Always create a new socket with the new token
+  // Create new socket with the token
   console.log('🔌 Creating new socket connection');
   console.log('🔌 Socket URL:', socketUrl);
   console.log('🔌 Token provided:', !!token);
@@ -44,7 +45,9 @@ export const initSocket = (token) => {
   
   socketInstance.on('connect_error', (err) => {
     console.error('❌ Socket connect error:', err.message);
-    console.error('❌ Error data:', err);
+    if (err.data) {
+      console.error('❌ Error details:', err.data);
+    }
   });
   
   socketInstance.on('disconnect', (reason) => {
@@ -62,7 +65,12 @@ export const getSocket = () => socketInstance;
 
 export const disconnectSocket = () => {
   if (socketInstance) {
+    console.log('🔌 Disconnecting socket...');
     socketInstance.disconnect();
     socketInstance = null;
   }
+};
+
+export const isSocketConnected = () => {
+  return socketInstance && socketInstance.connected;
 };

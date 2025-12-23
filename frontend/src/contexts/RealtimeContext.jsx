@@ -12,30 +12,46 @@ export const RealtimeProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const socketRefRef = useRef(null);
   const mockDataSubscriberRef = useRef(null);
+  const socketInitializedRef = useRef(false);
 
   // Initialize socket connection with JWT token
-  // Reinitialize when token changes (on login/logout)
+  // Only initialize once when token is available
   useEffect(() => {
-    const getToken = () => {
-      if (typeof window === 'undefined') return null;
-      return localStorage.getItem('token');
+    const initializeSocket = () => {
+      // Prevent multiple initialization attempts
+      if (socketInitializedRef.current) {
+        console.log('🔌 RealtimeContext: Socket already initializing/initialized');
+        return;
+      }
+      
+      const getToken = () => {
+        if (typeof window === 'undefined') return null;
+        return localStorage.getItem('token');
+      };
+
+      const token = getToken();
+      
+      if (token) {
+        socketInitializedRef.current = true;
+        console.log('🔌 RealtimeContext: Initializing socket with token');
+        const s = initSocket(token);
+        setSocket(s);
+        socketRefRef.current = s;
+      } else {
+        console.log('🔌 RealtimeContext: No token yet, will try again...');
+        // Retry socket initialization when token becomes available
+        const timer = setTimeout(() => {
+          socketInitializedRef.current = false;
+          initializeSocket();
+        }, 500);
+        return () => clearTimeout(timer);
+      }
     };
 
-    const token = getToken();
-    
-    if (token) {
-      console.log('🔌 RealtimeContext: Initializing socket with token');
-      const s = initSocket(token);
-      setSocket(s);
-      socketRefRef.current = s;
-    } else {
-      console.log('🔌 RealtimeContext: No token, clearing socket');
-      setSocket(null);
-      socketRefRef.current = null;
-    }
+    initializeSocket();
 
     return () => {
-      // Cleanup handled in socket.js
+      // Don't disconnect on unmount, keep socket alive for navigation
     };
   }, []);
 

@@ -199,42 +199,47 @@ export const useSocketChat = () => {
    */
   const sendMessage = useCallback(
     (content, conversationId) => {
-      console.log('🔵 sendMessage called with:', { content, conversationId, socketConnected: !!socket })
+      console.log('🔵 sendMessage called with:', { content, conversationId, socketConnected: socket?.connected })
       
       if (!socket) {
         console.error('❌ Socket is null/undefined')
-        return
+        return false
       }
 
       if (!socket.connected) {
         console.error('❌ Socket is not connected:', { connected: socket.connected, id: socket.id })
-        return
+        return false
       }
 
       if (!content.trim()) {
-        console.warn('❌ Content is empty')
-        return
+        console.warn('⚠️  Content is empty')
+        return false
       }
 
       if (!conversationId) {
         console.error('❌ No conversation ID provided')
-        return
+        return false
       }
 
       console.log('✅ All validations passed, emitting chat:send_message')
+      
+      // Emit the message
       socket.emit('chat:send_message', {
         conversationId,
         message: content.trim(),
       })
+      
       console.log('✅ Emitted chat:send_message to socket')
 
       // Optimistic update with temporary ID
       const tempId = `temp_${Date.now()}_${Math.random()}`
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
+      
       setMessages((prev) => [
         ...prev,
         {
           _id: tempId,
-          sender: 'self',
+          sender: currentUser._id,
           senderName: 'You',
           content: content.trim(),
           timestamp: new Date().toISOString(),
@@ -243,6 +248,7 @@ export const useSocketChat = () => {
         },
       ])
       console.log('✅ Added optimistic message to state')
+      return true
     },
     [socket]
   )

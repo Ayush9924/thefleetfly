@@ -108,9 +108,15 @@ export default function ChatWindow({ conversationId, otherUserName = 'User' }) {
     }
 
     console.log('📨 Sending message:', { conversationId, content: inputValue })
-    sendMessage(inputValue, conversationId)
-    setInputValue('')
-    setShowEmojiPicker(false)
+    const sent = sendMessage(inputValue, conversationId)
+    
+    if (sent) {
+      setInputValue('')
+      setShowEmojiPicker(false)
+    } else {
+      console.error('Failed to send message - socket not connected')
+      // Keep the message in the input so user can retry
+    }
   }
 
   const handleInputChange = (e) => {
