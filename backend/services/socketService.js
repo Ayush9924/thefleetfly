@@ -23,7 +23,12 @@ const socketService = (io) => {
     const userRole = socket.userRole;
     const userName = socket.userName;
 
-    console.log(`✅ User connected: ${userName} (${userRole}) - Socket: ${socket.id}`);
+    console.log(`\n========== SOCKET CONNECTION ==========`);
+    console.log(`✅ User connected: ${userName} (${userRole})`);
+    console.log(`✅ Socket ID: ${socket.id}`);
+    console.log(`✅ User ID: ${userId}`);
+    console.log(`✅ User Role: ${userRole}`);
+    console.log(`========== END SOCKET CONNECTION ==========\n`);
 
     // Track user sockets
     if (!userSockets.has(userId)) {
@@ -259,8 +264,18 @@ const socketService = (io) => {
       try {
         const { conversationId } = data;
         const roomName = `chat:${conversationId}`;
+        
+        console.log(`\n📍 CHAT:JOIN_CONVERSATION`);
+        console.log(`🔗 Socket: ${socket.id}`);
+        console.log(`👤 User: ${socket.userName} (${userId})`);
+        console.log(`💬 Conversation: ${conversationId}`);
+        console.log(`🚪 Room: ${roomName}`);
+        
         socket.join(roomName);
-        console.log(`✅ User ${userId} (${socket.userName}) joined room: ${roomName}`, { socketId: socket.id });
+        
+        console.log(`✅ Joined room ${roomName}`);
+        console.log(`📊 Rooms for socket:`, socket.rooms);
+        console.log(`\n`);
       } catch (error) {
         console.error('❌ Error in chat:join_conversation:', error.message);
       }
@@ -306,31 +321,44 @@ const socketService = (io) => {
       try {
         const { conversationId, message } = data;
 
-        console.log(`🔔 chat:send_message received:`, { conversationId, messageLength: message?.length, userId, socketId: socket.id });
+        console.log(`\n========== CHAT:SEND_MESSAGE ==========`);
+        console.log(`📨 Socket ID: ${socket.id}`);
+        console.log(`👤 User ID: ${userId}`);
+        console.log(`👤 User Name: ${socket.userName}`);
+        console.log(`💬 Conversation ID: ${conversationId}`);
+        console.log(`📝 Message Length: ${message?.length}`);
+        console.log(`📝 Message Content: "${message}"`);
 
         if (!conversationId || !message) {
-          console.error('❌ Missing fields:', { conversationId, message });
+          console.error('❌ Missing required fields:', { conversationId, message });
           socket.emit('error', 'Missing required fields: conversationId, message');
           return;
         }
 
+        console.log(`🔍 Looking up conversation in database...`);
         // Get conversation to find recipient
         let conversation = await Conversation.findOne({ conversationId });
         
         if (!conversation) {
-          console.warn(`⚠️  Conversation not found, attempting to create: ${conversationId}`);
+          console.log(`⚠️  Conversation not found in DB, creating...`);
           
           // Try to create conversation if it doesn't exist
           // Parse conversation ID to extract user IDs: direct-{id1}-{id2}
           const idParts = conversationId.split('-');
+          console.log(`🔨 Parsing conversation ID: ${conversationId} into parts:`, idParts);
+          
           if (idParts.length >= 3) {
             const [, id1, id2] = idParts;
+            console.log(`✅ Extracted user IDs: ${id1}, ${id2}`);
             
             try {
+              console.log(`🔍 Looking up User 1: ${id1}`);
               const user1 = await User.findById(id1).select('name email role');
+              console.log(`🔍 Looking up User 2: ${id2}`);
               const user2 = await User.findById(id2).select('name email role');
               
               if (user1 && user2) {
+                console.log(`✅ Found both users, creating conversation`);
                 conversation = new Conversation({
                   conversationId,
                   type: 'direct',
@@ -348,9 +376,9 @@ const socketService = (io) => {
                   ],
                 });
                 await conversation.save();
-                console.log(`✅ Conversation created on-the-fly:`, conversationId);
+                console.log(`✅ Conversation created successfully`);
               } else {
-                console.error('❌ Could not find users for conversation creation:', { id1, id2 });
+                console.error('❌ Could not find one or both users:', { user1: !!user1, user2: !!user2 });
                 socket.emit('error', 'Invalid conversation participants');
                 return;
               }
@@ -364,6 +392,8 @@ const socketService = (io) => {
             socket.emit('error', 'Invalid conversation ID format');
             return;
           }
+        } else {
+          console.log(`✅ Conversation found in DB`);
         }
 
         // Find recipient (the other participant)
@@ -371,12 +401,12 @@ const socketService = (io) => {
         const recipientId = recipient?.userId;
 
         if (!recipientId) {
-          console.error('❌ Could not find recipient in conversation:', { conversationId, participants: conversation.participants });
+          console.error('❌ Could not find recipient in conversation');
           socket.emit('error', 'Could not find message recipient');
           return;
         }
 
-        console.log(`✉️  Message details:`, { senderId: userId, senderName: socket.userName, recipientId, conversationId });
+        console.log(`✅ Recipient found: ${recipientId}`);
 
         const chatMessage = {
           conversationId,
@@ -390,6 +420,7 @@ const socketService = (io) => {
         };
 
         // Save to database
+        console.log(`💾 Saving message to MongoDB...`);
         try {
           const msgDoc = new Message({
             conversationId,
@@ -399,10 +430,12 @@ const socketService = (io) => {
             recipientId,
             content: message,
           });
-          await msgDoc.save();
+          const savedMsg = await msgDoc.save();
+          console.log(`✅ Message saved to MongoDB with ID: ${savedMsg._id}`);
+          console.log(`✅ Saved message:`, { _id: savedMsg._id, conversationId, senderId: userId });
 
           // Update conversation with last message
-          await Conversation.findOneAndUpdate(
+          const updateResult = await Conversation.findOneAndUpdate(
             { conversationId },
             {
               lastMessage: {
@@ -410,14 +443,17 @@ const socketService = (io) => {
                 senderId: userId,
                 timestamp: new Date(),
               },
-            }
+            },
+            { new: true }
           );
+          console.log(`✅ Conversation updated with last message`);
 
-          chatMessage._id = msgDoc._id;
-          console.log(`✅ Message saved to DB:`, { messageId: msgDoc._id, conversationId });
+          chatMessage._id = savedMsg._id;
         } catch (dbError) {
-          console.error('❌ Error saving message to DB:', dbError.message, dbError);
-          // Continue anyway - message still broadcasts real-time
+          console.error('❌ Error saving message to DB:', dbError.message);
+          console.error('❌ Full error:', dbError);
+          socket.emit('error', `Failed to save message: ${dbError.message}`);
+          return;
         }
 
         // Broadcast to conversation room
@@ -425,16 +461,19 @@ const socketService = (io) => {
         const socketsInRoom = io.sockets.adapter.rooms.get(roomName);
         const recipientCount = socketsInRoom ? socketsInRoom.size : 0;
         
-        console.log(`📤 Broadcasting to room: ${roomName} (${recipientCount} recipient(s))`);
+        console.log(`📡 Broadcasting to room: ${roomName}`);
+        console.log(`📡 Sockets in room: ${recipientCount}`);
         
         io.to(roomName).emit('chat:receive_message', {
           ...chatMessage,
-          message: message, // Keep both for compatibility
+          message: message,
         });
 
-        console.log(`💬 Message broadcast complete for conversation: ${conversationId}`);
+        console.log(`✅ Message broadcast complete`);
+        console.log(`========== END CHAT:SEND_MESSAGE ==========\n`);
       } catch (error) {
-        console.error('❌ Error in chat:send_message:', error.message, error);
+        console.error('❌ Error in chat:send_message:', error.message);
+        console.error('❌ Full error:', error);
         socket.emit('error', `Failed to send message: ${error.message}`);
       }
     });
