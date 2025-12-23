@@ -322,4 +322,35 @@ router.post('/conversations/start', protect, async (req, res) => {
   }
 });
 
-module.exports = router;
+/**
+ * DEBUG: GET /api/messages/debug/all
+ * Get all messages and conversations (for debugging only)
+ */
+router.get('/debug/all', protect, async (req, res) => {
+  try {
+    // Only allow admin to access debug endpoint
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const messages = await Message.find()
+      .select('conversationId senderId senderName content createdAt')
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    const conversations = await Conversation.find()
+      .select('conversationId type participants lastMessage')
+      .sort({ 'lastMessage.timestamp': -1 });
+
+    res.json({
+      messageCount: await Message.countDocuments(),
+      conversationCount: await Conversation.countDocuments(),
+      recentMessages: messages,
+      conversations: conversations,
+    });
+  } catch (error) {
+    console.error('Error fetching debug info:', error);
+    res.status(500).json({ error: 'Failed to fetch debug info' });
+  }
+});
+
