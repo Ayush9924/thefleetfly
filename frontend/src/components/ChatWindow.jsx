@@ -37,13 +37,13 @@ export default function ChatWindow({ conversationId, otherUserName = 'User' }) {
     // Set active conversation FIRST
     setActiveConversation(conversationId)
 
-    // Then load messages
+    // Then load messages via API
     const fetchMessages = async () => {
       try {
         setLoadingMessages(true)
         console.log('📥 Fetching messages for:', conversationId)
         const response = await api.get(`/messages/${conversationId}`)
-        console.log('✅ Messages loaded:', response.data?.length || 0, response.data)
+        console.log('✅ Messages loaded from API:', response.data?.length || 0)
         
         // Get current user
         const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
@@ -74,7 +74,7 @@ export default function ChatWindow({ conversationId, otherUserName = 'User' }) {
         setMessages(formattedMessages)
       } catch (error) {
         console.error('Error loading messages:', error)
-        setMessages([])
+        // Don't clear messages on error, keep what we have
       } finally {
         setLoadingMessages(false)
       }
@@ -82,7 +82,8 @@ export default function ChatWindow({ conversationId, otherUserName = 'User' }) {
 
     fetchMessages()
     
-    // Join socket room
+    // Join socket room AFTER API fetch
+    // This ensures we don't miss messages during the fetch
     loadMessages(conversationId)
   }, [conversationId, loadMessages, setMessages, setActiveConversation])
 

@@ -254,17 +254,22 @@ export const useSocketChat = () => {
    */
   const loadMessages = useCallback(
     (conversationId) => {
-      if (!socket) return
+      if (!socket) {
+        console.warn('Socket not available for loadMessages')
+        return
+      }
 
+      console.log('📡 loadMessages called for:', conversationId)
       setActiveConversation(conversationId)
-      setMessages([])
       setTypingUsers({})
 
-      // Join the room
+      // Join the room - this registers us to receive messages for this conversation
       socket.emit('chat:join_conversation', { conversationId })
+      console.log('✅ Emitted chat:join_conversation')
       
       // Mark all messages in this conversation as read
       socket.emit('chat:mark_conversation_read', { conversationId })
+      console.log('✅ Emitted chat:mark_conversation_read')
     },
     [socket]
   )
