@@ -20,15 +20,10 @@ export const RealtimeProvider = ({ children }) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     
     if (token) {
-      // Defer socket initialization to next tick to avoid blocking initial render
-      const timeout = setTimeout(() => {
-        console.log('🔌 RealtimeContext: Initializing socket with token');
-        const s = initSocket(token);
-        setSocket(s);
-        socketRefRef.current = s;
-      }, 100);
-      
-      initTimeoutRef.current = timeout;
+      console.log('🔌 RealtimeContext: Initializing socket with token');
+      const s = initSocket(token);
+      setSocket(s);
+      socketRefRef.current = s;
     } else {
       console.log('🔌 RealtimeContext: No token, clearing socket');
       setSocket(null);
@@ -46,6 +41,15 @@ export const RealtimeProvider = ({ children }) => {
   useEffect(() => {
     const initializeMockData = async () => {
       try {
+        // Only load mock data if NOT authenticated
+        const token = localStorage.getItem('token');
+        if (token) {
+          // User is authenticated, don't use mock data
+          console.log('✅ User authenticated, skipping mock data');
+          setLoading(false);
+          return;
+        }
+
         console.log('📡 Loading mock API vehicles...');
         // Load initial mock API data
         const initialMockVehicles = await mockFleetData.getVehicles(15);
@@ -53,18 +57,15 @@ export const RealtimeProvider = ({ children }) => {
         setLoading(false);
         console.log('✅ Mock API vehicles loaded:', initialMockVehicles?.length || 0);
         
-        // Subscribe to real-time updates from mock API - only if not using real backend
-        const token = localStorage.getItem('token');
-        if (!token) {
-          const subscriber = mockFleetData.subscribeToUpdates((updatedVehicles) => {
-            console.log('🔄 Mock API update received:', updatedVehicles?.length || 0);
-            setLocations(updatedVehicles);
-          }, 3000);
-          
-          // Start the updates
-          subscriber.start();
-          mockDataSubscriberRef.current = subscriber;
-        }
+        // Subscribe to real-time updates from mock API
+        const subscriber = mockFleetData.subscribeToUpdates((updatedVehicles) => {
+          console.log('🔄 Mock API update received:', updatedVehicles?.length || 0);
+          setLocations(updatedVehicles);
+        }, 3000);
+        
+        // Start the updates
+        subscriber.start();
+        mockDataSubscriberRef.current = subscriber;
         
       } catch (error) {
         console.error('❌ Error initializing mock data:', error);
