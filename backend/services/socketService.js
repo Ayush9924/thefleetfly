@@ -316,7 +316,8 @@ const socketService = (io) => {
         // Get conversation to find recipient
         const conversation = await Conversation.findOne({ conversationId });
         if (!conversation) {
-          console.error('❌ Conversation not found:', conversationId);
+          console.error('❌ Conversation not found:', { conversationId, searchedFormat: conversationId });
+          console.error('❌ Available conversations in DB:', await Conversation.find().limit(5).select('conversationId'));
           socket.emit('error', 'Conversation not found');
           return;
         }
@@ -325,7 +326,7 @@ const socketService = (io) => {
         const recipient = conversation.participants.find(p => String(p.userId) !== String(userId));
         const recipientId = recipient?.userId;
 
-        console.log(`✉️  Message details:`, { senderId: userId, senderName: socket.userName, recipientId });
+        console.log(`✉️  Message details:`, { senderId: userId, senderName: socket.userName, recipientId, conversationId });
 
         const chatMessage = {
           conversationId,
@@ -365,7 +366,7 @@ const socketService = (io) => {
           chatMessage._id = msgDoc._id;
           console.log(`✅ Message saved to DB:`, { messageId: msgDoc._id, conversationId });
         } catch (dbError) {
-          console.warn('⚠️  Message not saved to DB:', dbError.message);
+          console.error('❌ Error saving message to DB:', dbError.message, dbError);
           // Continue anyway - message still broadcasts real-time
         }
 
