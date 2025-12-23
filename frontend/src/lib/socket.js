@@ -22,15 +22,21 @@ export const initSocket = (token) => {
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
+    timeout: 10000, // 10 second connection timeout
+    transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
     forceNew: true, // Force new connection
+    withCredentials: true, // Important for CORS with credentials
   });
 
   socketInstance.on('connect', () => {
     console.log('✅ Socket connected:', socketInstance.id);
   });
+  
   socketInstance.on('connect_error', (err) => {
     console.error('❌ Socket connect error:', err.message);
+    // Log error but don't crash the app
   });
+  
   socketInstance.on('disconnect', () => {
     console.log('🔌 Socket disconnected');
   });
