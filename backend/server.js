@@ -9,62 +9,23 @@ const path = require('path');
 const morgan = require('morgan');
 const fs = require('fs');
 
-// Start database connection immediately and in parallel
-const dbConnectionPromise = connectDB();
+// Connect to database
+connectDB();
 
 const app = express();
 const server = http.createServer(app);
 
-// Socket.io setup with Redis adapter for production
+// Socket.io setup - Initialize immediately
 let io;
-let socketInitialized = false;
 
-const initializeSocket = () => {
-  if (socketInitialized) return;
-  socketInitialized = true;
-
-  if (process.env.REDIS_URL) {
-    const { createAdapter } = require('@socket.io/redis-adapter');
-    const { createClient } = require('redis');
-    
-    const redisClientPub = createClient({ url: process.env.REDIS_URL });
-    const redisClientSub = createClient({ url: process.env.REDIS_URL });
-    
-    Promise.all([redisClientPub.connect(), redisClientSub.connect()]).then(() => {
-      io = new socketIo.Server(server, {
-        cors: {
-          origin: process.env.NODE_ENV === 'production' 
-            ? [
-                process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
-                'https://thefleetfly.xyz',
-                'https://www.thefleetfly.xyz'
-              ]
-            : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
-          credentials: true,
-        },
-        adapter: createAdapter({ pubClient: redisClientPub, subClient: redisClientSub }),
-        transports: ['websocket', 'polling'],
-      });
-      console.log('✅ Socket.io initialized with Redis adapter');
-      setupSocketHandlers();
-    }).catch(err => {
-      console.error('❌ Redis connection failed, falling back to in-memory adapter:', err.message);
-      io = new socketIo.Server(server, {
-        cors: {
-          origin: process.env.NODE_ENV === 'production' 
-            ? [
-                process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
-                'https://thefleetfly.xyz',
-                'https://www.thefleetfly.xyz'
-              ]
-            : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
-          credentials: true,
-        },
-        transports: ['websocket', 'polling'],
-      });
-      setupSocketHandlers();
-    });
-  } else {
+if (process.env.REDIS_URL) {
+  const { createAdapter } = require('@socket.io/redis-adapter');
+  const { createClient } = require('redis');
+  
+  const redisClientPub = createClient({ url: process.env.REDIS_URL });
+  const redisClientSub = createClient({ url: process.env.REDIS_URL });
+  
+  Promise.all([redisClientPub.connect(), redisClientSub.connect()]).then(() => {
     io = new socketIo.Server(server, {
       cors: {
         origin: process.env.NODE_ENV === 'production' 
@@ -76,25 +37,33 @@ const initializeSocket = () => {
           : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
         credentials: true,
       },
+      adapter: createAdapter({ pubClient: redisClientPub, subClient: redisClientSub }),
       transports: ['websocket', 'polling'],
     });
-    console.log('✅ Socket.io initialized in development mode');
-    setupSocketHandlers();
-  }
-};
+    console.log('✅ Socket.io initialized with Redis adapter');
+  }).catch(err => {
+    console.error('❌ Redis connection failed, falling back to in-memory adapter:', err.message);
+    initializeInMemorySocket();
+  });
+} else {
+  initializeInMemorySocket();
+}
 
-const setupSocketHandlers = () => {
-  // Socket.io Authentication & Event Handler Setup
-  const socketAuth = require('./middleware/socketAuth');
-  const socketService = require('./services/socketService');
-
-  // Apply socket authentication middleware
-  io.use(socketAuth);
-
-  // Initialize socket event handlers
-  socketService(io);
-
-  console.log('✅ Socket.io authentication and services initialized');
+const initializeInMemorySocket = () => {
+  io = new socketIo.Server(server, {
+    cors: {
+      origin: process.env.NODE_ENV === 'production' 
+        ? [
+            process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
+            'https://thefleetfly.xyz',
+            'https://www.thefleetfly.xyz'
+          ]
+        : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
+      credentials: true,
+    },
+    transports: ['websocket', 'polling'],
+  });
+  console.log('✅ Socket.io initialized in development mode');
 };
 
 // Middleware
@@ -164,8 +133,21 @@ if (fs.existsSync(viteDist)) {
   app.use(express.static(craBuild));
 }
 
-// Initialize socket handlers after app setup
-initializeSocket();
+// Socket.io Authentication & Event Handler Setup
+const socketAuth = require('./middleware/socketAuth');
+const socketService = require('./services/socketService');
+
+// Setup socket handlers (io may not be ready immediately if using Redis, so add after creation)
+const setupSocketIfReady = setInterval(() => {
+  if (io) {
+    clearInterval(setupSocketIfReady);
+    // Apply socket authentication middleware
+    io.use(socketAuth);
+    // Initialize socket event handlers
+    socketService(io);
+    console.log('✅ Socket.io authentication and services initialized');
+  }
+}, 100);
 
 // Initialize maintenance background jobs asynchronously
 setImmediate(() => {
