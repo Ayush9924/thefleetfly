@@ -33,9 +33,7 @@ const socketCorsConfig = {
     : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://127.0.0.1:5173'],
   credentials: true,
   methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-  credentials: true,
-  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   allowEIO3: true,
 };
 
@@ -88,6 +86,13 @@ if (process.env.REDIS_URL) {
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+console.log('🔧 CORS Configuration:');
+console.log('   NODE_ENV:', process.env.NODE_ENV);
+console.log('   Allowed origins:', process.env.NODE_ENV === 'production' 
+  ? ['thefleetfly.xyz', 'www.thefleetfly.xyz', 'vercel.app', 'onrender.com']
+  : ['localhost:5173', 'localhost:5174', 'localhost:3000']);
+
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? [
@@ -105,6 +110,24 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(morgan('dev'));
+
+// Explicit OPTIONS handler for CORS preflight
+app.options('*', cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? [
+        process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
+        'https://thefleetfly.xyz',
+        'https://www.thefleetfly.xyz',
+        'https://thefleetfly-backend.onrender.com',
+        'http://localhost:5173',
+        'http://localhost:5174',
+        'http://localhost:3000'
+      ]
+    : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176', 'http://localhost:3000', 'http://127.0.0.1:5173'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 // Health check route
 app.get('/', (req, res) => {
