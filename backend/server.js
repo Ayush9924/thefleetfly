@@ -18,28 +18,39 @@ const server = http.createServer(app);
 // Socket.io setup - Initialize immediately
 let io;
 
-// Define socket initialization function BEFORE using it
-const initializeInMemorySocket = () => {
-  io = new socketIo.Server(server, {
-    path: '/socket.io/',
-    cors: {
-      origin: process.env.NODE_ENV === 'production' 
-        ? [
-            process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
-            'https://thefleetfly.xyz',
-            'https://www.thefleetfly.xyz',
-            'https://thefleetfly-backend.onrender.com', // Allow backend to receive from itself in production
-          ]
-        : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
-      credentials: true,
-      methods: ['GET', 'POST'],
-    },
-    transports: ['websocket', 'polling'],
-    allowEIO3: true,
-    pingInterval: 25000,
-    pingTimeout: 20000,
-  });
-  console.log('✅ Socket.io initialized with in-memory adapter');
+// CORS configuration for Socket.io
+const socketCorsConfig = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? [
+        'https://thefleetfly.xyz',
+        'https://www.thefleetfly.xyz',
+        'https://thefleetfly-frontend.vercel.app',
+        'https://thefleetfly-backend.onrender.com',
+      ]
+    : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://127.0.0.1:5173'],
+  credentials: true,
+  methods: ['GET', 'POST'],
+  allowEIO3: true,
+};
+
+// Socket.io configuration options
+const socketConfig = {
+  path: '/socket.io/',
+  cors: socketCorsConfig,
+  transports: ['websocket', 'polling'],
+  pingInterval: 25000,
+  pingTimeout: 20000,
+  connectTimeout: 45000,
+};
+
+// Define socket initialization function
+const initializeSocket = () => {
+  console.log('🔌 Initializing Socket.io...');
+  console.log('🔌 Environment:', process.env.NODE_ENV);
+  console.log('🔌 CORS origins:', socketCorsConfig.origin);
+  
+  io = new socketIo.Server(server, socketConfig);
+  console.log('✅ Socket.io initialized successfully');
 };
 
 // Initialize Socket.io
@@ -50,34 +61,22 @@ if (process.env.REDIS_URL) {
   const redisClientPub = createClient({ url: process.env.REDIS_URL });
   const redisClientSub = createClient({ url: process.env.REDIS_URL });
   
-  Promise.all([redisClientPub.connect(), redisClientSub.connect()]).then(() => {
-    io = new socketIo.Server(server, {
-      path: '/socket.io/',
-      cors: {
-        origin: process.env.NODE_ENV === 'production' 
-          ? [
-              process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
-              'https://thefleetfly.xyz',
-              'https://www.thefleetfly.xyz',
-              'https://thefleetfly-backend.onrender.com', // Allow backend to receive from itself in production
-            ]
-          : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
-        credentials: true,
-        methods: ['GET', 'POST'],
-      },
-      adapter: createAdapter({ pubClient: redisClientPub, subClient: redisClientSub }),
-      transports: ['websocket', 'polling'],
-      allowEIO3: true,
-      pingInterval: 25000,
-      pingTimeout: 20000,
+  Promise.all([redisClientPub.connect(), redisClientSub.connect()])
+    .then(() => {
+      io = new socketIo.Server(server, {
+        ...socketConfig,
+        adapter: createAdapter({ pubClient: redisClientPub, subClient: redisClientSub }),
+      });
+      console.log('✅ Socket.io initialized with Redis adapter');
+    })
+    .catch(err => {
+      console.error('❌ Redis connection failed:', err.message);
+      console.log('🔄 Falling back to in-memory adapter');
+      initializeSocket();
     });
-    console.log('✅ Socket.io initialized with Redis adapter');
-  }).catch(err => {
-    console.error('❌ Redis connection failed, falling back to in-memory adapter:', err.message);
-    initializeInMemorySocket();
-  });
 } else {
-  initializeInMemorySocket();
+  // Use in-memory adapter for development
+  initializeSocket();
 }
 
 // Middleware

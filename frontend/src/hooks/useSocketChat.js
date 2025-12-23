@@ -199,59 +199,75 @@ export const useSocketChat = () => {
    */
   const sendMessage = useCallback(
     (content, conversationId) => {
-      console.log('🔵 sendMessage called with:', { content, conversationId, socketConnected: socket?.connected })
+      console.log('🔵 sendMessage called:', {
+        contentLength: content?.length,
+        conversationId,
+        socketExists: !!socket,
+        socketConnected: socket?.connected,
+        socketId: socket?.id,
+      });
       
+      // Validation checks
       if (!socket) {
-        console.error('❌ Socket is null/undefined')
-        return false
+        console.error('❌ Socket is null/undefined - socket not initialized');
+        return false;
       }
 
       if (!socket.connected) {
-        console.error('❌ Socket is not connected:', { connected: socket.connected, id: socket.id })
-        return false
+        console.error('❌ Socket not connected:', {
+          connected: socket.connected,
+          disconnected: socket.disconnected,
+          id: socket.id,
+          status: socket.io?.opts?.reconnection ? 'reconnecting' : 'offline',
+        });
+        return false;
       }
 
-      if (!content.trim()) {
-        console.warn('⚠️  Content is empty')
-        return false
+      if (!content || !content.trim()) {
+        console.warn('⚠️  Message content is empty');
+        return false;
       }
 
       if (!conversationId) {
-        console.error('❌ No conversation ID provided')
-        return false
+        console.error('❌ No conversation ID provided');
+        return false;
       }
 
-      console.log('✅ All validations passed, emitting chat:send_message')
+      console.log('✅ All checks passed, emitting message...');
       
-      // Emit the message
+      // Emit the message event
       socket.emit('chat:send_message', {
         conversationId,
         message: content.trim(),
-      })
+      });
       
-      console.log('✅ Emitted chat:send_message to socket')
+      console.log('✅ Emitted chat:send_message event');
 
-      // Optimistic update with temporary ID
-      const tempId = `temp_${Date.now()}_${Math.random()}`
-      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
+      // Optimistic update
+      const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
       
-      setMessages((prev) => [
-        ...prev,
-        {
-          _id: tempId,
-          sender: currentUser._id,
-          senderName: 'You',
-          content: content.trim(),
-          timestamp: new Date().toISOString(),
-          read: true,
-          isOptimistic: true,
-        },
-      ])
-      console.log('✅ Added optimistic message to state')
-      return true
+      setMessages((prev) => {
+        const updated = [
+          ...prev,
+          {
+            _id: tempId,
+            sender: currentUser._id,
+            senderName: 'You',
+            content: content.trim(),
+            timestamp: new Date().toISOString(),
+            read: true,
+            isOptimistic: true,
+          },
+        ];
+        console.log('✅ Added optimistic message, total messages:', updated.length);
+        return updated;
+      });
+
+      return true;
     },
     [socket]
-  )
+  );
 
   /**
    * Notify that user is typing

@@ -1,96 +1,105 @@
 // frontend/src/lib/socket.js
 import { io } from 'socket.io-client';
 
-// Determine socket URL
+let socketInstance = null;
+let initAttempts = 0;
+const MAX_INIT_ATTEMPTS = 5;
+
 const getSocketUrl = () => {
-  // Try environment variable first
+  // Use environment variable if available
   if (import.meta.env.VITE_SOCKET_URL) {
+    console.log('🔌 Using VITE_SOCKET_URL:', import.meta.env.VITE_SOCKET_URL);
     return import.meta.env.VITE_SOCKET_URL;
   }
   
-  // Fallback to API URL without '/api'
+  // Fallback to API URL
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
-  return apiUrl.replace(/\/api\/?$/, '');
+  const url = apiUrl.replace(/\/api\/?$/, '');
+  console.log('🔌 Derived socket URL from API URL:', url);
+  return url;
 };
 
-const socketUrl = getSocketUrl();
-
-console.log('🔌 Socket Configuration:', {
-  socketUrl,
-  nodeEnv: import.meta.env.MODE,
-});
-
-let socketInstance = null;
-
 export const initSocket = (token) => {
-  // Prevent multiple socket instances
+  // Don't reinitialize if socket already exists and is connected
+  if (socketInstance && socketInstance.connected) {
+    console.log('✅ Socket already connected, reusing:', socketInstance.id);
+    return socketInstance;
+  }
+
+  // Disconnect any existing socket instance
   if (socketInstance) {
-    console.log('🔌 Socket instance already exists, disconnecting old one...');
+    console.log('🔌 Disconnecting previous socket instance');
     socketInstance.disconnect();
     socketInstance = null;
   }
 
+  // Validate token
   if (!token) {
-    console.error('❌ No token provided to initSocket');
+    console.error('❌ initSocket: No token provided');
     return null;
   }
 
-  console.log('🔌 Initializing socket connection');
-  console.log('🔌 Socket URL:', socketUrl);
-  console.log('🔌 Token available:', !!token);
-  
-  socketInstance = io(socketUrl, {
-    path: '/socket.io/',
-    auth: {
-      token: token,
-    },
-    reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
-    timeout: 20000,
-    transports: ['websocket', 'polling'],
-    forceNew: false,
-    withCredentials: true,
-  });
+  const socketUrl = getSocketUrl();
+  initAttempts++;
 
-  // Connection event
-  socketInstance.on('connect', () => {
-    console.log('✅ Socket connected successfully! ID:', socketInstance.id);
-  });
+  console.log(`🔌 [Attempt ${initAttempts}] Creating socket connection to: ${socketUrl}`);
+  console.log('🔌 Token length:', token.length);
   
-  // Connection error
-  socketInstance.on('connect_error', (error) => {
-    console.error('❌ Socket connect_error:', {
-      message: error.message,
-      type: error.type,
-      data: error.data,
+  try {
+    socketInstance = io(socketUrl, {
+      path: '/socket.io/',
+      auth: { token },
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 45000,
+      transports: ['websocket', 'polling'],
+      withCredentials: true,
     });
-  });
-  
-  // Disconnection event
-  socketInstance.on('disconnect', (reason) => {
-    console.log('🔌 Socket disconnected. Reason:', reason);
-  });
 
-  // Error event
-  socketInstance.on('error', (error) => {
-    console.error('❌ Socket error:', error);
-  });
+    // Connection success
+    socketInstance.on('connect', () => {
+      console.log('✅ Socket connected! ID:', socketInstance.id);
+      initAttempts = 0; // Reset attempts on successful connection
+    });
 
-  return socketInstance;
+    // Connection error
+    socketInstance.on('connect_error', (error) => {
+      console.error('❌ Socket connection error:', {
+        message: error.message,
+        code: error.code,
+        context: error.context?.type,
+      });
+    });
+
+    // Disconnection
+    socketInstance.on('disconnect', (reason) => {
+      console.log('🔌 Socket disconnected. Reason:', reason);
+    });
+
+    // Generic error
+    socketInstance.on('error', (data) => {
+      console.error('❌ Socket error:', data);
+    });
+
+    return socketInstance;
+  } catch (error) {
+    console.error('❌ Failed to create socket:', error.message);
+    return null;
+  }
 };
 
 export const getSocket = () => socketInstance;
 
+export const isSocketConnected = () => {
+  return !!(socketInstance && socketInstance.connected);
+};
+
 export const disconnectSocket = () => {
   if (socketInstance) {
-    console.log('🔌 Disconnecting socket...');
+    console.log('🔌 Disconnecting socket');
     socketInstance.disconnect();
     socketInstance = null;
   }
-};
-
-export const isSocketConnected = () => {
-  return socketInstance && socketInstance.connected;
 };
