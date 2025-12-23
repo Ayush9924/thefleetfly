@@ -1,18 +1,31 @@
 // frontend/src/lib/socket.js
 import { io } from 'socket.io-client';
 
-// Prefer dedicated socket URL; fallback to API URL without trailing '/api'
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
-const socketUrl = import.meta.env.VITE_SOCKET_URL || apiUrl.replace(/\/api\/?$/, '');
+// Determine socket URL
+const getSocketUrl = () => {
+  // Try environment variable first
+  if (import.meta.env.VITE_SOCKET_URL) {
+    return import.meta.env.VITE_SOCKET_URL;
+  }
+  
+  // Fallback to API URL without '/api'
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+  return apiUrl.replace(/\/api\/?$/, '');
+};
 
-console.log('🔌 Socket Configuration:', { apiUrl, socketUrl });
+const socketUrl = getSocketUrl();
+
+console.log('🔌 Socket Configuration:', {
+  socketUrl,
+  nodeEnv: import.meta.env.MODE,
+});
 
 let socketInstance = null;
 
 export const initSocket = (token) => {
-  // Disconnect old socket if exists
+  // Prevent multiple socket instances
   if (socketInstance) {
-    console.log('🔌 Disconnecting existing socket instance...');
+    console.log('🔌 Socket instance already exists, disconnecting old one...');
     socketInstance.disconnect();
     socketInstance = null;
   }
@@ -22,40 +35,47 @@ export const initSocket = (token) => {
     return null;
   }
 
-  // Create new socket with the token
-  console.log('🔌 Creating new socket connection');
+  console.log('🔌 Initializing socket connection');
   console.log('🔌 Socket URL:', socketUrl);
-  console.log('🔌 Token provided:', !!token);
+  console.log('🔌 Token available:', !!token);
   
   socketInstance = io(socketUrl, {
-    auth: { token },
+    path: '/socket.io/',
+    auth: {
+      token: token,
+    },
     reconnection: true,
     reconnectionAttempts: 10,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
-    timeout: 20000, // 20 second connection timeout
-    transports: ['websocket', 'polling'], // Try websocket first, fallback to polling
-    forceNew: true, // Force new connection
-    withCredentials: true, // Important for CORS with credentials
+    timeout: 20000,
+    transports: ['websocket', 'polling'],
+    forceNew: false,
+    withCredentials: true,
   });
 
+  // Connection event
   socketInstance.on('connect', () => {
-    console.log('✅ Socket connected successfully:', socketInstance.id);
+    console.log('✅ Socket connected successfully! ID:', socketInstance.id);
   });
   
-  socketInstance.on('connect_error', (err) => {
-    console.error('❌ Socket connect error:', err.message);
-    if (err.data) {
-      console.error('❌ Error details:', err.data);
-    }
+  // Connection error
+  socketInstance.on('connect_error', (error) => {
+    console.error('❌ Socket connect_error:', {
+      message: error.message,
+      type: error.type,
+      data: error.data,
+    });
   });
   
+  // Disconnection event
   socketInstance.on('disconnect', (reason) => {
-    console.log('🔌 Socket disconnected, reason:', reason);
+    console.log('🔌 Socket disconnected. Reason:', reason);
   });
 
+  // Error event
   socketInstance.on('error', (error) => {
-    console.error('❌ Socket error event:', error);
+    console.error('❌ Socket error:', error);
   });
 
   return socketInstance;

@@ -21,19 +21,25 @@ let io;
 // Define socket initialization function BEFORE using it
 const initializeInMemorySocket = () => {
   io = new socketIo.Server(server, {
+    path: '/socket.io/',
     cors: {
       origin: process.env.NODE_ENV === 'production' 
         ? [
             process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
             'https://thefleetfly.xyz',
-            'https://www.thefleetfly.xyz'
+            'https://www.thefleetfly.xyz',
+            'https://thefleetfly-backend.onrender.com', // Allow backend to receive from itself in production
           ]
         : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
       credentials: true,
+      methods: ['GET', 'POST'],
     },
     transports: ['websocket', 'polling'],
+    allowEIO3: true,
+    pingInterval: 25000,
+    pingTimeout: 20000,
   });
-  console.log('✅ Socket.io initialized in development mode');
+  console.log('✅ Socket.io initialized with in-memory adapter');
 };
 
 // Initialize Socket.io
@@ -46,18 +52,24 @@ if (process.env.REDIS_URL) {
   
   Promise.all([redisClientPub.connect(), redisClientSub.connect()]).then(() => {
     io = new socketIo.Server(server, {
+      path: '/socket.io/',
       cors: {
         origin: process.env.NODE_ENV === 'production' 
           ? [
               process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
               'https://thefleetfly.xyz',
-              'https://www.thefleetfly.xyz'
+              'https://www.thefleetfly.xyz',
+              'https://thefleetfly-backend.onrender.com', // Allow backend to receive from itself in production
             ]
           : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
         credentials: true,
+        methods: ['GET', 'POST'],
       },
       adapter: createAdapter({ pubClient: redisClientPub, subClient: redisClientSub }),
       transports: ['websocket', 'polling'],
+      allowEIO3: true,
+      pingInterval: 25000,
+      pingTimeout: 20000,
     });
     console.log('✅ Socket.io initialized with Redis adapter');
   }).catch(err => {
