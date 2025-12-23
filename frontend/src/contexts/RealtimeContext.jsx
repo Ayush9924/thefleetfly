@@ -16,7 +16,12 @@ export const RealtimeProvider = ({ children }) => {
   // Initialize socket connection with JWT token
   // Reinitialize when token changes (on login/logout)
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const getToken = () => {
+      if (typeof window === 'undefined') return null;
+      return localStorage.getItem('token');
+    };
+
+    const token = getToken();
     
     if (token) {
       console.log('🔌 RealtimeContext: Initializing socket with token');
@@ -32,7 +37,7 @@ export const RealtimeProvider = ({ children }) => {
     return () => {
       // Cleanup handled in socket.js
     };
-  }, [typeof window !== 'undefined' ? localStorage.getItem('token') : null]);
+  }, []);
 
   // Initialize with mock API data - always load for initial display
   useEffect(() => {
