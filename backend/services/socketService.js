@@ -267,7 +267,8 @@ const socketService = (io) => {
 
     /**
      * Create or resolve a conversation between two users
-     * Deterministic room id: chat:{sortedUserIdA_userIdB}
+     * Deterministic room id: chat:direct-{sortedUserIdA}-{sortedUserIdB}
+     * MUST MATCH the format used in messageRoutes.js: "direct-{id1}-{id2}"
      */
     socket.on('chat:start_conversation', (data) => {
       try {
@@ -278,8 +279,9 @@ const socketService = (io) => {
         }
 
         // Deterministic conversation id based on the two userIds
+        // MUST MATCH API format: direct-{id1}-{id2}
         const sorted = [String(userId), String(otherUserId)].sort();
-        const conversationId = `${sorted[0]}_${sorted[1]}`;
+        const conversationId = `direct-${sorted[0]}-${sorted[1]}`;
 
         // Join both participants to room (this socket now; other will join on open)
         socket.join(`chat:${conversationId}`);
