@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { initSocket } from '../lib/socket';
 import { mockFleetData } from '../services/mockApi';
 
@@ -12,7 +12,6 @@ export const RealtimeProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const socketRefRef = useRef(null);
   const mockDataSubscriberRef = useRef(null);
-  const initTimeoutRef = useRef(null);
 
   // Initialize socket connection with JWT token
   // Reinitialize when token changes (on login/logout)
@@ -31,26 +30,15 @@ export const RealtimeProvider = ({ children }) => {
     }
 
     return () => {
-      if (initTimeoutRef.current) {
-        clearTimeout(initTimeoutRef.current);
-      }
+      // Cleanup handled in socket.js
     };
   }, [typeof window !== 'undefined' ? localStorage.getItem('token') : null]);
 
-  // Initialize with mock API data - now deferred
+  // Initialize with mock API data - always load for initial display
   useEffect(() => {
     const initializeMockData = async () => {
       try {
-        // Only load mock data if NOT authenticated
-        const token = localStorage.getItem('token');
-        if (token) {
-          // User is authenticated, don't use mock data
-          console.log('✅ User authenticated, skipping mock data');
-          setLoading(false);
-          return;
-        }
-
-        console.log('📡 Loading mock API vehicles...');
+        console.log('📡 Loading mock API vehicles for initial display...');
         // Load initial mock API data
         const initialMockVehicles = await mockFleetData.getVehicles(15);
         setLocations(initialMockVehicles);
@@ -73,13 +61,10 @@ export const RealtimeProvider = ({ children }) => {
       }
     };
 
-    // Defer mock data loading to avoid blocking initial render
-    const timeout = setTimeout(() => {
-      initializeMockData();
-    }, 200);
+    // Load mock data immediately
+    initializeMockData();
 
     return () => {
-      clearTimeout(timeout);
       // Stop mock data updates on cleanup
       if (mockDataSubscriberRef.current) {
         mockDataSubscriberRef.current.stop();

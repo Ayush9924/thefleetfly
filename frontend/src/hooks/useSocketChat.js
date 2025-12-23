@@ -172,20 +172,20 @@ export const useSocketChat = () => {
       )
     }
 
-    // Register listeners
-    console.log('📡 Registering message listener for socket:', socket.id)
+    // Register listeners - only once when socket is available, NOT on activeConversation change
+    console.log('📡 Registering message listener for socket:', socket?.id)
     socket.on('chat:receive_message', handleReceiveMessage)
     socket.on('chat:user_typing', handleTyping)
     socket.on('chat:conversation_read', handleConversationRead)
 
     // Cleanup: Remove listeners
     return () => {
-      console.log('🧹 Removing message listener for socket:', socket.id)
+      console.log('🧹 Removing message listener for socket:', socket?.id)
       socket.off('chat:receive_message', handleReceiveMessage)
       socket.off('chat:user_typing', handleTyping)
       socket.off('chat:conversation_read', handleConversationRead)
     }
-  }, [socket, activeConversation])
+  }, [socket])
 
   /**
    * Send a message
