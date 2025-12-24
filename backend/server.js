@@ -111,24 +111,6 @@ app.use(cors({
 }));
 app.use(morgan('dev'));
 
-// Explicit OPTIONS handler for CORS preflight
-app.options('*', cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? [
-        process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
-        'https://thefleetfly.xyz',
-        'https://www.thefleetfly.xyz',
-        'https://thefleetfly-backend.onrender.com',
-        'http://localhost:5173',
-        'http://localhost:5174',
-        'http://localhost:3000'
-      ]
-    : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176', 'http://localhost:3000', 'http://127.0.0.1:5173'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
 // Health check route
 app.get('/', (req, res) => {
   res.json({ 
