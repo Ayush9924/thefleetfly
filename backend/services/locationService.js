@@ -1,5 +1,4 @@
 // backend/services/locationService.js
-const { v4: uuidv4 } = require('uuid');
 
 class LocationService {
   constructor() {

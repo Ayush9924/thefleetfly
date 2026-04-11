@@ -10,19 +10,16 @@ const morgan = require('morgan');
 const fs = require('fs');
 const isTestEnv = process.env.NODE_ENV === 'test';
 
-const hasMailUser = Boolean(process.env.GMAIL_USER || process.env.SMTP_USER);
-const hasMailPass = Boolean(process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS);
-
-if (!hasMailUser) {
-  console.error('[STARTUP] MISSING ENV VAR: GMAIL_USER (or SMTP_USER)');
+if (!process.env.MAILGUN_API_KEY) {
+  console.error('[STARTUP] MISSING ENV VAR: MAILGUN_API_KEY');
 } else {
-  console.log('[STARTUP] Mail user loaded ✓');
+  console.log('[STARTUP] MAILGUN_API_KEY loaded ✓');
 }
 
-if (!hasMailPass) {
-  console.error('[STARTUP] MISSING ENV VAR: GMAIL_APP_PASSWORD (or SMTP_PASS)');
+if (!process.env.MAILGUN_DOMAIN) {
+  console.error('[STARTUP] MISSING ENV VAR: MAILGUN_DOMAIN');
 } else {
-  console.log('[STARTUP] Mail password loaded ✓');
+  console.log('[STARTUP] MAILGUN_DOMAIN loaded ✓');
 }
 
 if (!process.env.JWT_SECRET) {
@@ -176,6 +173,7 @@ app.use('/api/routes', require('./routes/routeRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
 app.use('/api/location', require('./routes/locationRoutes'));
+app.use('/', require('./routes/mailRoutes'));
 
 
 // Serve static files (for uploaded images)

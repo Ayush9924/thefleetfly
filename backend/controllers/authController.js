@@ -292,7 +292,7 @@ const requestPasswordReset = async (req, res) => {
       console.error('[AUTH] Forgot password email error:', error.message);
       return res.status(500).json({
         success: false,
-        message: 'Failed to send OTP. Please try again.',
+        message: 'Failed to send OTP email. Please try again.',
       });
     }
 
