@@ -251,7 +251,7 @@ thefleetfly/
 - **Location Service**: Real-time GPS tracking and location history management
 - **Socket Service**: WebSocket event handling for real-time updates
 - **Maintenance Service**: Automated scheduling and tracking
-- **Email Service**: Notification delivery via Nodemailer
+- **Email Service**: Notification delivery via Mailgun API
 
 #### Frontend Architecture
 - **Components**: Reusable UI components built with Radix UI

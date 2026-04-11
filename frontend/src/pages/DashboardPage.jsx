@@ -151,7 +151,7 @@ export default function DashboardPage() {
   const weekLabel = `${startOfWeek(new Date()).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${endOfWeek(new Date()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 
   return (
-    <div className="space-y-6 p-4 sm:p-6 max-w-screen-xl mx-auto">
+    <div className="space-y-6 p-4 sm:p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="flex items-center gap-3">

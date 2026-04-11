@@ -173,6 +173,7 @@ app.use('/api/routes', require('./routes/routeRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
 app.use('/api/location', require('./routes/locationRoutes'));
+// Mailgun API routes (public): POST /send-email, POST /send-otp
 app.use('/', require('./routes/mailRoutes'));
 
 

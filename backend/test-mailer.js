@@ -4,7 +4,7 @@ const { sendOTPEmail, sendPasswordChangedEmail, testMailer } = require('./utils/
 async function runTest() {
   console.log('\n🔧 FleetFly Mailgun Test\n');
   console.log('MAILGUN_DOMAIN:', process.env.MAILGUN_DOMAIN);
-  console.log('MAIL_FROM:', process.env.MAIL_FROM);
+  console.log('SENDER:', 'FleetFly <mail@mg.thefleetfly.xyz>');
   console.log('');
 
   // Step 1: Verify Mailgun configuration
@@ -24,7 +24,7 @@ async function runTest() {
   // Step 2: Send test OTP email
   console.log('\nStep 2: Sending test OTP email to', testRecipient, '...');
   const testOTP = '847291';
-  const otpSent = await sendOTPEmail(testRecipient, testOTP, 'Karan');
+  const otpSent = await sendOTPEmail(testRecipient, testOTP);
   if (otpSent) {
     console.log('✅ OTP email sent successfully! OTP was:', testOTP);
   } else {

@@ -21,6 +21,10 @@ try {
 
 // Colour palette per driver index
 const COLORS = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#ec4899','#14b8a6'];
+const toId = (value) => {
+  if (value == null) return '';
+  return String(value);
+};
 
 // ── Inner per-driver marker (uses the hook) ───────────────────────────────────
 function SingleDriverMarker({ map, driverId, position, isMoving, label, colorIdx }) {
@@ -68,11 +72,12 @@ export default function FleetLiveMap({ onDriverClick }) {
     setIsConnected(socket.connected);
 
     const handleUpdate = (data) => {
-      if (!data?.driverId || !data?.latitude || !data?.longitude) return;
+      const driverId = toId(data?.driverId);
+      if (!driverId || !data?.latitude || !data?.longitude) return;
       setDrivers((prev) => ({
         ...prev,
-        [data.driverId]: {
-          ...prev[data.driverId],
+        [driverId]: {
+          ...prev[driverId],
           latitude:  parseFloat(data.latitude),
           longitude: parseFloat(data.longitude),
           speed:     parseFloat(data.speed)   || 0,
@@ -84,10 +89,11 @@ export default function FleetLiveMap({ onDriverClick }) {
     };
 
     const handleStop = (data) => {
-      if (!data?.driverId) return;
+      const driverId = toId(data?.driverId);
+      if (!driverId) return;
       setDrivers((prev) => {
         const next = { ...prev };
-        delete next[data.driverId];
+        delete next[driverId];
         return next;
       });
     };
@@ -102,7 +108,10 @@ export default function FleetLiveMap({ onDriverClick }) {
     socket.on('map:all_locations', (locs) => {
       if (!Array.isArray(locs)) return;
       const obj = {};
-      locs.forEach((l) => { if (l.driverId) obj[l.driverId] = l; });
+      locs.forEach((l) => {
+        const driverId = toId(l?.driverId);
+        if (driverId) obj[driverId] = { ...l, driverId };
+      });
       setDrivers(obj);
       setLastSync(new Date());
     });
@@ -123,7 +132,8 @@ export default function FleetLiveMap({ onDriverClick }) {
         setDrivers((prev) => {
           const next = { ...prev };
           locs.forEach((l) => {
-            if (l.driverId) next[l.driverId] = { ...next[l.driverId], ...l };
+            const driverId = toId(l?.driverId);
+            if (driverId) next[driverId] = { ...next[driverId], ...l, driverId };
           });
           return next;
         });
@@ -196,7 +206,7 @@ export default function FleetLiveMap({ onDriverClick }) {
               className="bg-gray-900/90 backdrop-blur border border-gray-700 hover:border-blue-500/50 rounded-xl px-3 py-2.5 text-left shadow-lg transition-all group w-44"
             >
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ background: COLORS[i % COLORS.length] }} />
                 <span className="text-white text-xs font-semibold truncate">{loc.name || id.slice(0, 8) + '…'}</span>
               </div>
               <p className="text-gray-500 text-[10px] mt-1 flex items-center gap-1">

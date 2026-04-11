@@ -30,9 +30,14 @@ export function useLocationSharing() {
   const lastPosRef  = useRef(null);
   const driverIdRef = useRef(null);
 
+  const toId = (value) => {
+    if (value == null) return null;
+    return String(value);
+  };
+
   // Keep driverId in sync with auth
   useEffect(() => {
-    driverIdRef.current = currentUser?._id || currentUser?.id || null;
+    driverIdRef.current = toId(currentUser?._id || currentUser?.id);
   }, [currentUser]);
 
   const emitLocation = useCallback((latitude, longitude, speed, heading, accuracy) => {

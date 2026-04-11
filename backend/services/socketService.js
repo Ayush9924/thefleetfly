@@ -17,6 +17,11 @@ const RATE_LIMIT_MS      = 6_000;  // min 6s between accepted socket updates per
 const DB_MIN_DISTANCE_M  = 25;     // only write MongoDB if moved ≥25m
 const DB_MAX_INTERVAL_MS = 60_000; // always write MongoDB every 60s regardless of movement
 
+const normalizeId = (value) => {
+  if (value == null) return '';
+  return String(value);
+};
+
 // Simple haversine for backend DB-write gating (no external dep)
 function haversineBack(lat1, lon1, lat2, lon2) {
   const R = 6_371_000, r = v => v * Math.PI / 180;
@@ -37,7 +42,7 @@ const locationService = require('./locationService');
  */
 const socketService = (io) => {
   io.on('connection', (socket) => {
-    const userId = socket.userId;
+    const userId = normalizeId(socket.userId);
     const userRole = socket.userRole;
     const userName = socket.userName;
 
@@ -73,7 +78,8 @@ const socketService = (io) => {
      */
     socket.on('driver:join_tracking', (data) => {
       try {
-        const { driverId, vehicleId } = data;
+        const driverId = normalizeId(data?.driverId || socket.userId);
+        const vehicleId = normalizeId(data?.vehicleId);
         
         if (!driverId) {
           socket.emit('error', 'Invalid driver ID');
@@ -82,7 +88,9 @@ const socketService = (io) => {
 
         // Join driver to a room for location tracking
         socket.join(`driver:${driverId}`);
-        socket.join(`vehicle:${vehicleId}`);
+        if (vehicleId) {
+          socket.join(`vehicle:${vehicleId}`);
+        }
         
         console.log(`📍 Driver ${driverId} started location tracking`);
         
@@ -109,7 +117,10 @@ const socketService = (io) => {
     socket.on('driver:location_update', async (data) => {
       try {
         const { latitude, longitude, speed, heading, accuracy, mileage } = data;
-        const driverId = data.driverId || socket.userId;
+        const driverId = normalizeId(data?.driverId || socket.userId);
+        if (!driverId) {
+          return;
+        }
 
         // ── 0. Server-side rate limit ─────────────────────────────────────
         const nowMs    = Date.now();
@@ -175,8 +186,8 @@ const socketService = (io) => {
         console.log(`⇒ location [${driverId.slice(-6)}] ±${Math.round(accuracy||0)}m  →  ${io.engine.clientsCount} clients`);
 
         // Also push to any vehicle-specific room listeners
-        if (data.vehicleId) {
-          io.to(`vehicle:${data.vehicleId}`).emit('driver:location_update', locationPayload);
+        if (data?.vehicleId) {
+          io.to(`vehicle:${normalizeId(data.vehicleId)}`).emit('driver:location_update', locationPayload);
         }
       } catch (error) {
         console.error('[BACKEND] ❌ Error in driver:location_update:', error.message, error.stack);
@@ -188,7 +199,10 @@ const socketService = (io) => {
      */
     socket.on('map:request_location', (data) => {
       try {
-        const { driverId } = data;
+        const driverId = normalizeId(data?.driverId);
+        if (!driverId) {
+          return;
+        }
         const location = activeLocations.get(driverId);
 
         if (location) {
@@ -224,7 +238,12 @@ const socketService = (io) => {
      */
     socket.on('driver:stop_tracking', async (data) => {
       try {
-        const { driverId, vehicleId } = data;
+        const driverId = normalizeId(data?.driverId || socket.userId);
+        const vehicleId = normalizeId(data?.vehicleId);
+
+        if (!driverId) {
+          return;
+        }
 
         // ── 1. Leave socket rooms ────────────────────────────────────────
         socket.leave(`driver:${driverId}`);

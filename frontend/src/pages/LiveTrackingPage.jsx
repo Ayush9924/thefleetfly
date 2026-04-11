@@ -73,6 +73,11 @@ function haversineM(lat1,lon1,lat2,lon2){
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
+const toId = (value) => {
+  if (value == null) return '';
+  return String(value);
+};
+
 // ════════════════════════════════════════════════════════════════════════════
 // DRIVER VIEW
 // ════════════════════════════════════════════════════════════════════════════
@@ -135,7 +140,7 @@ function DriverView() {
   const emitLocation = useCallback((lat, lng, accuracy, speed, heading, force = false) => {
     const s    = socketRef.current;
     const user = currentUserRef.current;
-    const driverId = user?._id || user?.id;
+    const driverId = toId(user?._id || user?.id);
 
     if (!s?.connected || !driverId) return;
 
@@ -183,8 +188,9 @@ function DriverView() {
     lastPayloadRef.current  = null;
 
     const driverId = currentUserRef.current?._id || currentUserRef.current?.id;
-    if (socketRef.current?.connected && driverId) {
-      socketRef.current.emit('driver:join_tracking', { driverId });
+    const normalizedDriverId = toId(driverId);
+    if (socketRef.current?.connected && normalizedDriverId) {
+      socketRef.current.emit('driver:join_tracking', { driverId: normalizedDriverId });
     }
 
     watchRef.current = navigator.geolocation.watchPosition(handlePos, handleErr, {
@@ -204,8 +210,9 @@ function DriverView() {
     if (watchRef.current    !== null) { navigator.geolocation.clearWatch(watchRef.current); watchRef.current = null; }
     if (keepaliveRef.current !== null) { clearInterval(keepaliveRef.current); keepaliveRef.current = null; }
     const driverId = currentUserRef.current?._id || currentUserRef.current?.id;
-    if (socketRef.current?.connected && driverId) {
-      socketRef.current.emit('driver:stop_tracking', { driverId });
+    const normalizedDriverId = toId(driverId);
+    if (socketRef.current?.connected && normalizedDriverId) {
+      socketRef.current.emit('driver:stop_tracking', { driverId: normalizedDriverId });
     }
     setStatus('idle'); setPosition(null);
     lastEmittedRef.current = null;
@@ -251,7 +258,7 @@ function DriverView() {
         )}
       </div>
 
-      <div className="w-full lg:w-72 flex-shrink-0 flex flex-col gap-4">
+      <div className="w-full lg:w-72 shrink-0 flex flex-col gap-4">
         <div className="rounded-2xl border border-gray-700 bg-gray-900 p-5 shadow-lg">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -280,7 +287,7 @@ function DriverView() {
           {error && (
             <motion.div initial={{opacity:0}} animate={{opacity:1}}
               className="text-xs text-amber-300 bg-amber-950/50 border border-amber-800/40 rounded-xl p-3 mb-4 flex gap-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5"/><span>{error}</span>
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5"/><span>{error}</span>
             </motion.div>
           )}
           <button onClick={status==='sharing'?stopSharing:startSharing} disabled={status==='requesting'}
@@ -340,7 +347,7 @@ function AdminView() {
   const applyLocation = useCallback((data) => {
     const lat = parseFloat(data?.latitude);
     const lng = parseFloat(data?.longitude);
-    const did = data?.driverId;
+    const did = toId(data?.driverId);
 
     if (!did || isNaN(lat) || isNaN(lng)) return;
 
@@ -428,15 +435,15 @@ function AdminView() {
         {/* Status bar */}
         <div className="absolute top-3 left-3 right-3 z-40 flex items-center gap-2" style={{ pointerEvents:'none' }}>
           <div className="bg-gray-900/90 border border-gray-700 rounded-xl px-4 py-2.5 flex items-center gap-3 shadow flex-1 overflow-hidden" style={{ pointerEvents:'auto' }}>
-            <Users className="w-4 h-4 text-blue-400 flex-shrink-0"/>
+            <Users className="w-4 h-4 text-blue-400 shrink-0"/>
             <span className="text-white font-semibold text-sm">
               {driverList.length} Active Driver{driverList.length !== 1 ? 's' : ''}
             </span>
-            {lastUpdate && <span className="ml-auto text-gray-500 text-xs flex-shrink-0">{fmt(lastUpdate)}</span>}
+            {lastUpdate && <span className="ml-auto text-gray-500 text-xs shrink-0">{fmt(lastUpdate)}</span>}
           </div>
           <motion.div animate={{ opacity:[1,.5,1] }} transition={{ duration:2, repeat:Infinity }}
             style={{ pointerEvents:'auto' }}
-            className={`flex items-center gap-1.5 bg-gray-900/90 border rounded-xl px-3 py-2.5 shadow flex-shrink-0 ${
+            className={`flex items-center gap-1.5 bg-gray-900/90 border rounded-xl px-3 py-2.5 shadow shrink-0 ${
               sockStatus==='connected' ? 'border-green-500/40' : 'border-red-500/40'}`}>
             {sockStatus === 'connected'
               ? <><Wifi className="w-4 h-4 text-green-400"/><span className="text-green-400 text-xs font-bold">Live</span></>
@@ -464,7 +471,7 @@ function AdminView() {
 
       {/* Driver sidebar */}
       {driverList.length > 0 && (
-        <div className="flex-shrink-0 flex flex-col gap-2 overflow-y-auto" style={{ width:200 }}>
+        <div className="shrink-0 flex flex-col gap-2 overflow-y-auto" style={{ width:200 }}>
           <p className="text-gray-400 text-[11px] font-bold uppercase tracking-wider px-1">Drivers Online</p>
           {driverList.map(([id, loc], i) => (
             <button key={id}
@@ -476,7 +483,7 @@ function AdminView() {
               className={`border rounded-xl p-3 text-left transition hover:border-blue-500/50 ${
                 focused===id ? 'border-blue-500 bg-blue-950/30' : 'border-gray-700 bg-gray-900'}`}>
               <div className="flex items-center gap-2 mb-1">
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                <span className="w-2.5 h-2.5 rounded-full shrink-0"
                   style={{ background: colorMapRef.current[id] || COLORS[i % COLORS.length] }}/>
                 <span className="text-white text-xs font-bold truncate">{id.slice(-8)}</span>
               </div>
@@ -506,8 +513,8 @@ export default function LiveTrackingPage() {
     // Use inline style for height — avoids Tailwind's h-full chain issues
     <div style={{ height:'calc(100vh - 4rem)', display:'flex', flexDirection:'column', gap:'1rem', padding:'1rem', background:'#030712', overflow:'hidden' }}>
       {/* Header */}
-      <div className="flex items-center gap-3 flex-shrink-0">
-        <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center flex-shrink-0">
+      <div className="flex items-center gap-3 shrink-0">
+        <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shrink-0">
           <Map className="w-5 h-5 text-white"/>
         </div>
         <div>

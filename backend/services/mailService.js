@@ -1,6 +1,10 @@
 const formData = require('form-data');
 const Mailgun = require('mailgun.js');
 
+// Mailgun sender requested by project requirements.
+const MAILGUN_FROM = 'FleetFly <mail@mg.thefleetfly.xyz>';
+
+// OTP values are stored in-memory for a short period.
 const OTP_TTL_MS = 10 * 60 * 1000;
 const otpStore = new Map();
 
@@ -10,12 +14,6 @@ const mailgunDomain = process.env.MAILGUN_DOMAIN;
 const mailgunClient = mailgunApiKey
   ? new Mailgun(formData).client({ username: 'api', key: mailgunApiKey })
   : null;
-
-const getDefaultFrom = () => {
-  if (process.env.MAIL_FROM) return process.env.MAIL_FROM;
-  if (mailgunDomain) return `FleetFly <no-reply@${mailgunDomain}>`;
-  return 'FleetFly <no-reply@example.com>';
-};
 
 const cleanupExpiredOtps = () => {
   const now = Date.now();
@@ -29,57 +27,63 @@ const cleanupExpiredOtps = () => {
 const otpCleanupTimer = setInterval(cleanupExpiredOtps, 60 * 1000);
 if (otpCleanupTimer.unref) otpCleanupTimer.unref();
 
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 const storeOTP = (email, otp) => {
-  otpStore.set(email.toLowerCase(), {
+  otpStore.set(normalizeEmail(email), {
     otp,
     expiresAt: Date.now() + OTP_TTL_MS,
   });
 };
 
-const getStoredOTP = (email) => otpStore.get(email.toLowerCase()) || null;
+const getStoredOTP = (email) => otpStore.get(normalizeEmail(email)) || null;
 
 const sendEmail = async (to, subject, text, html) => {
   if (!to || !subject || (!text && !html)) {
     return {
       success: false,
-      error: 'Missing required email fields: to, subject, and text or html',
+      error: 'Missing required fields: to, subject, and text or html',
     };
   }
 
   if (!mailgunApiKey || !mailgunDomain || !mailgunClient) {
-    return {
-      success: false,
-      error: 'Mailgun is not configured. Set MAILGUN_API_KEY and MAILGUN_DOMAIN',
-    };
+    const msg = 'Mailgun is not configured. Set MAILGUN_API_KEY and MAILGUN_DOMAIN';
+    console.error('[MAILGUN] Config error:', msg);
+    return { success: false, error: msg };
   }
 
   try {
-    const data = await mailgunClient.messages.create(mailgunDomain, {
-      from: getDefaultFrom(),
+    const response = await mailgunClient.messages.create(mailgunDomain, {
+      from: MAILGUN_FROM,
       to: [to],
       subject,
       text,
       html,
     });
 
-    console.log('[MAILGUN] Email sent:', {
+    console.log('[MAILGUN] Send success:', {
       to,
       subject,
-      id: data?.id || 'unknown',
+      id: response?.id || null,
+      message: response?.message || null,
     });
 
     return {
       success: true,
-      data,
+      data: response,
     };
   } catch (error) {
-    console.error('[MAILGUN] Email send failed:', error.message);
+    const details = {
+      message: error?.message || 'Unknown Mailgun error',
+      status: error?.status || error?.statusCode || null,
+      details: error?.details || error?.response?.body || null,
+    };
+    console.error('[MAILGUN] Send failed:', details);
     return {
       success: false,
-      error: error.message,
-      details: error,
+      error: details.message,
+      details,
     };
   }
 };
@@ -101,12 +105,14 @@ const sendOtpEmail = async (to, otp) => {
 };
 
 const createAndSendOtp = async (to) => {
+  const normalizedTo = normalizeEmail(to);
   const otp = generateOTP();
-  storeOTP(to, otp);
 
-  const result = await sendOtpEmail(to, otp);
+  storeOTP(normalizedTo, otp);
+  const result = await sendOtpEmail(normalizedTo, otp);
+
   if (!result.success) {
-    otpStore.delete(to.toLowerCase());
+    otpStore.delete(normalizedTo);
     return result;
   }
 

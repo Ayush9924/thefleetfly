@@ -37,7 +37,7 @@ const socketAuth = async (socket, next) => {
       }
       
       console.log('✅ User found in database:', user.name);
-      socket.userId = user._id;
+      socket.userId = String(user._id);
       socket.userRole = user.role;
       socket.userName = user.name;
       socket.userEmail = user.email;
@@ -51,7 +51,7 @@ const socketAuth = async (socket, next) => {
       
       if (devUser) {
         console.log('✅ Using dev cache for user:', devUser.name);
-        socket.userId = devUser._id;
+        socket.userId = String(devUser._id);
         socket.userRole = devUser.role;
         socket.userName = devUser.name;
         socket.userEmail = devUser.email;
