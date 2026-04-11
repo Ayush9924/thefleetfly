@@ -12,9 +12,9 @@ const isTestEnv = process.env.NODE_ENV === 'test';
 
 ['BREVO_SMTP_USER', 'BREVO_SMTP_KEY', 'BREVO_FROM'].forEach(key => {
   if (!process.env[key]) {
-    console.error(`[STARTUP] MISSING ENV VAR: ${key} — email will fail`);
+    console.error(`[STARTUP] ❌ MISSING: ${key}`);
   } else {
-    console.log(`[STARTUP] ${key} ✓`);
+    console.log(`[STARTUP] ✓ ${key} loaded`);
   }
 });
 

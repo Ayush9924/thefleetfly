@@ -1,97 +1,27 @@
 const nodemailer = require('nodemailer');
 
-const SMTP_CANDIDATES = [
-  { host: 'smtp-relay.brevo.com', port: 2525, secure: false },
-  { host: 'smtp-relay.brevo.com', port: 587, secure: false },
-  { host: 'smtp-relay.sendinblue.com', port: 587, secure: false },
-  { host: 'smtp-relay.sendinblue.com', port: 2525, secure: false },
-  { host: 'smtp-relay.brevo.com', port: 465, secure: true },
-  { host: 'smtp-relay.sendinblue.com', port: 465, secure: true },
-];
-
-let activeSmtpConfig = null;
-
-const cleanEnv = (value) => String(value || '').trim().replace(/^['"]|['"]$/g, '');
-const smtpUser = cleanEnv(process.env.BREVO_SMTP_USER);
-const smtpPass = cleanEnv(process.env.BREVO_SMTP_KEY);
-
-const createTransport = (config) => nodemailer.createTransport({
-  host: config.host,
-  port: config.port,
-  secure: config.secure,
-  connectionTimeout: 8_000,
-  greetingTimeout: 8_000,
-  socketTimeout: 12_000,
+const transporter = nodemailer.createTransport({
+  host: 'smtp-relay.brevo.com',
+  port: 465,
+  secure: true,
   auth: {
-    user: smtpUser,
-    pass: smtpPass,
+    user: process.env.BREVO_SMTP_USER,
+    pass: process.env.BREVO_SMTP_KEY,
   },
+  connectionTimeout: 10000,
+  socketTimeout: 10000,
 });
 
-const getSmtpOrder = () => {
-  if (!activeSmtpConfig) return SMTP_CANDIDATES;
-  return [activeSmtpConfig, ...SMTP_CANDIDATES.filter(
-    (c) => !(c.host === activeSmtpConfig.host && c.port === activeSmtpConfig.port && c.secure === activeSmtpConfig.secure)
-  )];
-};
-
-const sendWithSmtpFallback = async (mailOptions) => {
-  if (!smtpUser || !smtpPass) {
-    throw new Error('Brevo SMTP credentials are missing (BREVO_SMTP_USER / BREVO_SMTP_KEY)');
+transporter.verify((error) => {
+  if (error) {
+    console.error('[MAILER] Brevo SMTP FAILED:', error.message);
+  } else {
+    console.log('[MAILER] Brevo SMTP ready on port 465 ✓');
   }
-
-  const attempts = getSmtpOrder();
-  let lastError = null;
-
-  for (const cfg of attempts) {
-    const transporter = createTransport(cfg);
-    try {
-      const info = await transporter.sendMail(mailOptions);
-      activeSmtpConfig = cfg;
-      console.log(`[MAILER] Brevo SMTP ready ✓ (${cfg.host}:${cfg.port}, secure=${cfg.secure})`);
-      return info;
-    } catch (error) {
-      lastError = error;
-      console.error(`[MAILER] SMTP attempt failed (${cfg.host}:${cfg.port}, secure=${cfg.secure}):`, error.message);
-
-      // Invalid login is deterministic; retrying other hosts won't fix wrong creds.
-      if (/invalid login|535|eauth/i.test(String(error.message || ''))) {
-        throw new Error('Brevo SMTP authentication failed (check BREVO_SMTP_USER and BREVO_SMTP_KEY)');
-      }
-    }
-  }
-
-  throw lastError || new Error('All SMTP attempts failed');
-};
-
-// Probe the currently preferred route at startup (non-blocking).
-(async () => {
-  try {
-    const first = getSmtpOrder()[0];
-    const transporter = createTransport(first);
-    await transporter.verify();
-    activeSmtpConfig = first;
-    console.log(`[MAILER] Brevo SMTP ready ✓ (${first.host}:${first.port}, secure=${first.secure})`);
-  } catch (error) {
-    console.error('[MAILER] Brevo SMTP connection failed:', error.message);
-  }
-})();
-
-const sendEmail = async ({ to, subject, text, html }) => {
-  const info = await sendWithSmtpFallback({
-    from: `"FleetFly" <${process.env.BREVO_FROM}>`,
-    to,
-    subject,
-    text,
-    html,
-  });
-
-  console.log('[MAILER] Email sent to:', to, '| ID:', info.messageId);
-  return info;
-};
+});
 
 const sendOTPEmail = async (toEmail, otp) => {
-  const info = await sendWithSmtpFallback({
+  const info = await transporter.sendMail({
     from: `"FleetFly" <${process.env.BREVO_FROM}>`,
     to: toEmail,
     subject: 'Your FleetFly OTP Code',
@@ -113,10 +43,10 @@ const sendOTPEmail = async (toEmail, otp) => {
 };
 
 const sendPasswordChangedEmail = async (toEmail) => {
-  const info = await sendWithSmtpFallback({
+  const info = await transporter.sendMail({
     from: `"FleetFly" <${process.env.BREVO_FROM}>`,
     to: toEmail,
-    subject: 'FleetFly — Password Changed Successfully',
+    subject: 'FleetFly — Password Changed',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
         <div style="background: #0f172a; color: #ffffff; padding: 16px 20px; font-size: 20px; font-weight: 700;">FleetFly</div>
@@ -131,14 +61,4 @@ const sendPasswordChangedEmail = async (toEmail) => {
   return info;
 };
 
-const testMailer = async () => {
-  if (!process.env.BREVO_SMTP_USER || !process.env.BREVO_SMTP_KEY || !process.env.BREVO_FROM) {
-    console.error('[MAILER] Missing BREVO_SMTP_USER, BREVO_SMTP_KEY, or BREVO_FROM');
-    return false;
-  }
-
-  console.log('[MAILER] Brevo configuration present ✓');
-  return true;
-};
-
-module.exports = { sendOTPEmail, sendPasswordChangedEmail, testMailer, sendEmail };
+module.exports = { sendOTPEmail, sendPasswordChangedEmail };

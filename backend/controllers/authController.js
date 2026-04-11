@@ -288,23 +288,13 @@ const requestPasswordReset = async (req, res) => {
     }
 
     try {
-      console.log('[AUTH] Sending OTP email via mailer...');
-      const sendPromise = sendOTPEmail(email, otp);
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('sendOTPEmail timeout after 20s')), 20_000);
-      });
-
-      await Promise.race([sendPromise, timeoutPromise]);
-      console.log('[AUTH] OTP email send completed');
-      return res.status(200).json({
-        success: true,
-        message: 'OTP sent to your email',
-      });
+      await sendOTPEmail(email, otp);
+      return res.status(200).json({ success: true, message: 'OTP sent to your email' });
     } catch (error) {
-      console.error('[AUTH] sendOTPEmail failed:', error.message);
+      console.error('[AUTH] OTP email failed:', error.message);
       return res.status(500).json({
         success: false,
-        message: 'Failed to send OTP email. Please check mail server configuration and try again.',
+        message: 'Failed to send OTP. Please try again.',
       });
     }
 
