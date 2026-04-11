@@ -1,11 +1,13 @@
 const nodemailer = require('nodemailer');
 const { Resend } = require('resend');
 
+const mailProvider = (process.env.MAIL_PROVIDER || 'smtp').toLowerCase();
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
-const isProduction = process.env.NODE_ENV === 'production';
-const allowSmtpFallback = process.env.ALLOW_SMTP_FALLBACK === 'true';
+
+const shouldUseResend = () => mailProvider === 'resend' || mailProvider === 'auto';
+const shouldUseSmtp = () => mailProvider === 'smtp' || mailProvider === 'auto';
 
 const hasResend = () => {
   const key = process.env.RESEND_API_KEY || '';
@@ -115,18 +117,18 @@ const sendOTPEmail = async (email, otp, name) => {
       `,
     };
 
-    try {
-      if (await sendWithResend({ to: email, subject, html: mailOptions.html })) {
-        return true;
+    if (shouldUseResend()) {
+      try {
+        if (await sendWithResend({ to: email, subject, html: mailOptions.html })) {
+          return true;
+        }
+      } catch (resendError) {
+        console.error('⚠️ Resend send failed, falling back to SMTP:', resendError.message);
       }
-    } catch (resendError) {
-      console.error('⚠️ Resend send failed, falling back to SMTP:', resendError.message);
     }
 
-    // Render free instances block outbound SMTP ports (25/465/587).
-    // In production, only use SMTP if explicitly allowed.
-    if (isProduction && !allowSmtpFallback) {
-      console.error('❌ SMTP fallback disabled in production. Configure RESEND_API_KEY and RESEND_FROM_EMAIL.');
+    if (!shouldUseSmtp()) {
+      console.error(`❌ Mail provider '${mailProvider}' is not configured for SMTP fallback.`);
       return false;
     }
 
@@ -194,16 +196,18 @@ const sendPasswordChangedEmail = async (email, name) => {
       `,
     };
 
-    try {
-      if (await sendWithResend({ to: email, subject, html: mailOptions.html })) {
-        return true;
+    if (shouldUseResend()) {
+      try {
+        if (await sendWithResend({ to: email, subject, html: mailOptions.html })) {
+          return true;
+        }
+      } catch (resendError) {
+        console.error('⚠️ Resend send failed, falling back to SMTP:', resendError.message);
       }
-    } catch (resendError) {
-      console.error('⚠️ Resend send failed, falling back to SMTP:', resendError.message);
     }
 
-    if (isProduction && !allowSmtpFallback) {
-      console.error('❌ SMTP fallback disabled in production. Configure RESEND_API_KEY and RESEND_FROM_EMAIL.');
+    if (!shouldUseSmtp()) {
+      console.error(`❌ Mail provider '${mailProvider}' is not configured for SMTP fallback.`);
       return false;
     }
 
