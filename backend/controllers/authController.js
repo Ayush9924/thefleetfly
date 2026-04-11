@@ -288,19 +288,17 @@ const requestPasswordReset = async (req, res) => {
 
     try {
       await sendOTPEmail(email, otp);
+      return res.status(200).json({
+        success: true,
+        message: 'OTP sent to your email',
+      });
     } catch (error) {
-      console.error('[AUTH] Forgot password email error:', error.message);
+      console.error('[AUTH] sendOTPEmail failed:', error.message);
       return res.status(500).json({
         success: false,
         message: 'Failed to send OTP email. Please try again.',
       });
     }
-
-    res.status(200).json({
-      success: true,
-      message: 'OTP sent successfully to your email',
-      email: email
-    });
 
   } catch (error) {
     console.error('Error in requestPasswordReset:', error);

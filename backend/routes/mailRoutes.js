@@ -1,12 +1,23 @@
 const express = require('express');
-const {
-  sendEmail,
-  createAndSendOtp,
-} = require('../services/mailService');
+const { sendEmail, sendOTPEmail } = require('../utils/mailer');
 
 const router = express.Router();
 
 const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const OTP_TTL_MS = 10 * 60 * 1000;
+const otpStore = new Map();
+
+const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [email, entry] of otpStore.entries()) {
+    if (entry.expiresAt <= now) {
+      otpStore.delete(email);
+    }
+  }
+}, 60_000).unref?.();
 
 router.post('/send-email', async (req, res) => {
   try {
@@ -26,20 +37,12 @@ router.post('/send-email', async (req, res) => {
       });
     }
 
-    const result = await sendEmail(to, subject, text, html);
-    if (!result.success) {
-      console.error('[MAIL ROUTE] /send-email failed:', result.error, result.details || '');
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to send email',
-        error: result.error,
-      });
-    }
+    const info = await sendEmail({ to, subject, text, html });
 
     return res.status(200).json({
       success: true,
       message: 'Email sent successfully',
-      id: result.data?.id,
+      id: info?.messageId,
     });
   } catch (error) {
     console.error('[MAIL ROUTE] /send-email unexpected error:', error.message);
@@ -68,20 +71,16 @@ router.post('/send-otp', async (req, res) => {
       });
     }
 
-    const result = await createAndSendOtp(to);
-    if (!result.success) {
-      console.error('[MAIL ROUTE] /send-otp failed:', result.error, result.details || '');
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to send OTP',
-        error: result.error,
-      });
-    }
+    const otp = generateOTP();
+    const emailKey = normalizeEmail(to);
+    otpStore.set(emailKey, { otp, expiresAt: Date.now() + OTP_TTL_MS });
+
+    await sendOTPEmail(to, otp);
 
     return res.status(200).json({
       success: true,
       message: 'OTP sent successfully',
-      expiresInSeconds: result.expiresInSeconds,
+      expiresInSeconds: Math.floor(OTP_TTL_MS / 1000),
     });
   } catch (error) {
     console.error('[MAIL ROUTE] /send-otp unexpected error:', error.message);

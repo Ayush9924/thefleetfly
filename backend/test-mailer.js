@@ -2,22 +2,22 @@ require('dotenv').config();
 const { sendOTPEmail, sendPasswordChangedEmail, testMailer } = require('./utils/mailer');
 
 async function runTest() {
-  console.log('\n🔧 FleetFly Mailgun Test\n');
-  console.log('MAILGUN_DOMAIN:', process.env.MAILGUN_DOMAIN);
-  console.log('SENDER:', 'FleetFly <mail@mg.thefleetfly.xyz>');
+  console.log('\n🔧 FleetFly Brevo SMTP Test\n');
+  console.log('BREVO_SMTP_USER:', process.env.BREVO_SMTP_USER ? 'set' : 'missing');
+  console.log('BREVO_FROM:', process.env.BREVO_FROM);
   console.log('');
 
-  // Step 1: Verify Mailgun configuration
-  console.log('Step 1: Verifying Mailgun configuration...');
+  // Step 1: Verify Brevo configuration
+  console.log('Step 1: Verifying Brevo configuration...');
   const connected = await testMailer();
   if (!connected) {
-    console.error('❌ Mailgun config check failed. Check your .env values.');
+    console.error('❌ Brevo config check failed. Check your .env values.');
     process.exit(1);
   }
 
-  const testRecipient = process.env.MAILGUN_TEST_TO;
+  const testRecipient = process.env.MAIL_TEST_TO;
   if (!testRecipient) {
-    console.error('❌ Set MAILGUN_TEST_TO in .env to run this test script.');
+    console.error('❌ Set MAIL_TEST_TO in .env to run this test script.');
     process.exit(1);
   }
 

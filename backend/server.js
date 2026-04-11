@@ -10,17 +10,13 @@ const morgan = require('morgan');
 const fs = require('fs');
 const isTestEnv = process.env.NODE_ENV === 'test';
 
-if (!process.env.MAILGUN_API_KEY) {
-  console.error('[STARTUP] MISSING ENV VAR: MAILGUN_API_KEY');
-} else {
-  console.log('[STARTUP] MAILGUN_API_KEY loaded ✓');
-}
-
-if (!process.env.MAILGUN_DOMAIN) {
-  console.error('[STARTUP] MISSING ENV VAR: MAILGUN_DOMAIN');
-} else {
-  console.log('[STARTUP] MAILGUN_DOMAIN loaded ✓');
-}
+['BREVO_SMTP_USER', 'BREVO_SMTP_KEY', 'BREVO_FROM'].forEach(key => {
+  if (!process.env[key]) {
+    console.error(`[STARTUP] MISSING ENV VAR: ${key} — email will fail`);
+  } else {
+    console.log(`[STARTUP] ${key} ✓`);
+  }
+});
 
 if (!process.env.JWT_SECRET) {
   console.error('[STARTUP] MISSING ENV VAR: JWT_SECRET');
@@ -173,7 +169,7 @@ app.use('/api/routes', require('./routes/routeRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
 app.use('/api/location', require('./routes/locationRoutes'));
-// Mailgun API routes (public): POST /send-email, POST /send-otp
+// Brevo SMTP routes (public): POST /send-email, POST /send-otp
 app.use('/', require('./routes/mailRoutes'));
 
 
