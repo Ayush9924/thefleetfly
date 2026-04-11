@@ -1,8 +1,8 @@
 const nodemailer = require('nodemailer');
 
 const SMTP_CANDIDATES = [
-  { host: 'smtp-relay.brevo.com', port: 587, secure: false },
   { host: 'smtp-relay.brevo.com', port: 2525, secure: false },
+  { host: 'smtp-relay.brevo.com', port: 587, secure: false },
   { host: 'smtp-relay.sendinblue.com', port: 587, secure: false },
   { host: 'smtp-relay.sendinblue.com', port: 2525, secure: false },
   { host: 'smtp-relay.brevo.com', port: 465, secure: true },
@@ -10,6 +10,10 @@ const SMTP_CANDIDATES = [
 ];
 
 let activeSmtpConfig = null;
+
+const cleanEnv = (value) => String(value || '').trim().replace(/^['"]|['"]$/g, '');
+const smtpUser = cleanEnv(process.env.BREVO_SMTP_USER);
+const smtpPass = cleanEnv(process.env.BREVO_SMTP_KEY);
 
 const createTransport = (config) => nodemailer.createTransport({
   host: config.host,
@@ -19,8 +23,8 @@ const createTransport = (config) => nodemailer.createTransport({
   greetingTimeout: 8_000,
   socketTimeout: 12_000,
   auth: {
-    user: process.env.BREVO_SMTP_USER,
-    pass: process.env.BREVO_SMTP_KEY,
+    user: smtpUser,
+    pass: smtpPass,
   },
 });
 
@@ -32,6 +36,10 @@ const getSmtpOrder = () => {
 };
 
 const sendWithSmtpFallback = async (mailOptions) => {
+  if (!smtpUser || !smtpPass) {
+    throw new Error('Brevo SMTP credentials are missing (BREVO_SMTP_USER / BREVO_SMTP_KEY)');
+  }
+
   const attempts = getSmtpOrder();
   let lastError = null;
 
@@ -45,6 +53,11 @@ const sendWithSmtpFallback = async (mailOptions) => {
     } catch (error) {
       lastError = error;
       console.error(`[MAILER] SMTP attempt failed (${cfg.host}:${cfg.port}, secure=${cfg.secure}):`, error.message);
+
+      // Invalid login is deterministic; retrying other hosts won't fix wrong creds.
+      if (/invalid login|535|eauth/i.test(String(error.message || ''))) {
+        throw new Error('Brevo SMTP authentication failed (check BREVO_SMTP_USER and BREVO_SMTP_KEY)');
+      }
     }
   }
 
@@ -65,7 +78,7 @@ const sendWithSmtpFallback = async (mailOptions) => {
 })();
 
 const sendEmail = async ({ to, subject, text, html }) => {
-  const sendMailPromise = sendWithSmtpFallback({
+  const info = await sendWithSmtpFallback({
     from: `"FleetFly" <${process.env.BREVO_FROM}>`,
     to,
     subject,
@@ -73,18 +86,12 @@ const sendEmail = async ({ to, subject, text, html }) => {
     html,
   });
 
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('SMTP send timeout after 15s')), 15_000);
-  });
-
-  const info = await Promise.race([sendMailPromise, timeoutPromise]);
-
   console.log('[MAILER] Email sent to:', to, '| ID:', info.messageId);
   return info;
 };
 
 const sendOTPEmail = async (toEmail, otp) => {
-  const sendMailPromise = sendWithSmtpFallback({
+  const info = await sendWithSmtpFallback({
     from: `"FleetFly" <${process.env.BREVO_FROM}>`,
     to: toEmail,
     subject: 'Your FleetFly OTP Code',
@@ -101,18 +108,12 @@ const sendOTPEmail = async (toEmail, otp) => {
       </div>
     `,
   });
-
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('SMTP send timeout after 15s')), 15_000);
-  });
-
-  const info = await Promise.race([sendMailPromise, timeoutPromise]);
   console.log('[MAILER] OTP sent to:', toEmail, '| ID:', info.messageId);
   return info;
 };
 
 const sendPasswordChangedEmail = async (toEmail) => {
-  const sendMailPromise = sendWithSmtpFallback({
+  const info = await sendWithSmtpFallback({
     from: `"FleetFly" <${process.env.BREVO_FROM}>`,
     to: toEmail,
     subject: 'FleetFly — Password Changed Successfully',
@@ -127,12 +128,6 @@ const sendPasswordChangedEmail = async (toEmail) => {
       </div>
     `,
   });
-
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('SMTP send timeout after 15s')), 15_000);
-  });
-
-  const info = await Promise.race([sendMailPromise, timeoutPromise]);
   return info;
 };
 
