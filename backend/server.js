@@ -10,19 +10,13 @@ const morgan = require('morgan');
 const fs = require('fs');
 const isTestEnv = process.env.NODE_ENV === 'test';
 
-['BREVO_SMTP_USER', 'BREVO_SMTP_KEY', 'BREVO_FROM'].forEach(key => {
+['BREVO_API_KEY', 'BREVO_FROM'].forEach(key => {
   if (!process.env[key]) {
     console.error(`[STARTUP] ❌ MISSING: ${key}`);
   } else {
     console.log(`[STARTUP] ✓ ${key} loaded`);
   }
 });
-
-if (process.env.BREVO_API_KEY) {
-  console.log('[STARTUP] ✓ BREVO_API_KEY loaded (HTTP fallback available)');
-} else {
-  console.log('[STARTUP] ℹ BREVO_API_KEY not set (SMTP-only mode)');
-}
 
 if (!process.env.JWT_SECRET) {
   console.error('[STARTUP] MISSING ENV VAR: JWT_SECRET');

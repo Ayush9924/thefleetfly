@@ -1,123 +1,42 @@
-const nodemailer = require('nodemailer');
-const https = require('https');
+const axios = require('axios');
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.BREVO_SMTP_USER,
-    pass: process.env.BREVO_SMTP_KEY,
-  },
-  connectionTimeout: 10000,
-  socketTimeout: 10000,
-});
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
-const MAILER_FROM_NAME = 'FleetFly';
-const BREVO_API_TIMEOUT_MS = 10000;
-
-const sendViaBrevoApi = ({ toEmail, subject, html }) => {
-  const apiKey = process.env.BREVO_API_KEY || '';
-  if (!apiKey) {
-    return Promise.reject(new Error('BREVO_API_KEY is missing for HTTP fallback'));
+const sendEmail = async ({ to, subject, html }) => {
+  if (!process.env.BREVO_API_KEY) {
+    throw new Error('BREVO_API_KEY environment variable is not set');
   }
 
-  return new Promise((resolve, reject) => {
-    const payload = JSON.stringify({
+  const response = await axios.post(
+    BREVO_API_URL,
+    {
       sender: {
-        name: MAILER_FROM_NAME,
+        name: 'FleetFly',
         email: process.env.BREVO_FROM,
       },
-      to: [{ email: toEmail }],
+      to: [{ email: to }],
       subject,
       htmlContent: html,
-    });
-
-    const req = https.request({
-      hostname: 'api.brevo.com',
-      path: '/v3/smtp/email',
-      method: 'POST',
+    },
+    {
       headers: {
+        'api-key': process.env.BREVO_API_KEY,
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        'api-key': apiKey,
-        'Content-Length': Buffer.byteLength(payload),
       },
-      timeout: BREVO_API_TIMEOUT_MS,
-    }, (res) => {
-      let body = '';
-      res.on('data', (chunk) => { body += chunk; });
-      res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          let parsed = {};
-          try {
-            parsed = body ? JSON.parse(body) : {};
-          } catch {
-            parsed = {};
-          }
-          resolve({
-            messageId: parsed.messageId || parsed.messageid || 'brevo-api-no-message-id',
-          });
-          return;
-        }
-
-        reject(new Error(`Brevo API failed (${res.statusCode}): ${body}`));
-      });
-    });
-
-    req.on('timeout', () => {
-      req.destroy(new Error('Brevo API request timeout'));
-    });
-    req.on('error', (error) => reject(error));
-    req.write(payload);
-    req.end();
-  });
-};
-
-const isSmtpNetworkTimeout = (error) => {
-  const msg = String(error?.message || '').toLowerCase();
-  return (
-    msg.includes('connection timeout') ||
-    msg.includes('timed out') ||
-    msg.includes('etimedout') ||
-    msg.includes('econnrefused') ||
-    msg.includes('ehostunreach') ||
-    msg.includes('enetunreach')
-  );
-};
-
-const sendWithFallback = async ({ toEmail, subject, html }) => {
-  try {
-    const info = await transporter.sendMail({
-      from: `"FleetFly" <${process.env.BREVO_FROM}>`,
-      to: toEmail,
-      subject,
-      html,
-    });
-    return info;
-  } catch (error) {
-    if (!isSmtpNetworkTimeout(error)) {
-      throw error;
+      timeout: 10000,
     }
+  );
 
-    console.error('[MAILER] SMTP timeout detected, trying Brevo HTTP API fallback...');
-    const apiInfo = await sendViaBrevoApi({ toEmail, subject, html });
-    console.log('[MAILER] Brevo API fallback success | ID:', apiInfo.messageId);
-    return apiInfo;
-  }
+  console.log('[MAILER] Email sent via Brevo API | MessageID:', response.data.messageId);
+  return response.data;
 };
-
-transporter.verify((error) => {
-  if (error) {
-    console.error('[MAILER] Brevo SMTP FAILED:', error.message);
-  } else {
-    console.log('[MAILER] Brevo SMTP ready on port 465 ✓');
-  }
-});
 
 const sendOTPEmail = async (toEmail, otp) => {
-  const subject = 'Your FleetFly OTP Code';
-  const html = `
+  return sendEmail({
+    to: toEmail,
+    subject: 'Your FleetFly OTP Code',
+    html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
         <div style="background: #0f172a; color: #ffffff; padding: 16px 20px; font-size: 20px; font-weight: 700;">FleetFly</div>
         <div style="padding: 20px; color: #111827;">
@@ -128,16 +47,15 @@ const sendOTPEmail = async (toEmail, otp) => {
           <p style="margin: 0; color: #6b7280;">Didn't request this? Ignore this email.</p>
         </div>
       </div>
-    `;
-
-  const info = await sendWithFallback({ toEmail, subject, html });
-  console.log('[MAILER] OTP sent to:', toEmail, '| ID:', info.messageId);
-  return info;
+    `,
+  });
 };
 
 const sendPasswordChangedEmail = async (toEmail) => {
-  const subject = 'FleetFly — Password Changed';
-  const html = `
+  return sendEmail({
+    to: toEmail,
+    subject: 'FleetFly — Password Changed Successfully',
+    html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
         <div style="background: #0f172a; color: #ffffff; padding: 16px 20px; font-size: 20px; font-weight: 700;">FleetFly</div>
         <div style="padding: 20px; color: #111827;">
@@ -146,10 +64,8 @@ const sendPasswordChangedEmail = async (toEmail) => {
           <p style="margin: 0; color: #6b7280;">If you did not do this, contact support immediately.</p>
         </div>
       </div>
-    `;
-
-  const info = await sendWithFallback({ toEmail, subject, html });
-  return info;
+    `,
+  });
 };
 
 module.exports = { sendOTPEmail, sendPasswordChangedEmail };

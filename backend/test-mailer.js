@@ -2,14 +2,14 @@ require('dotenv').config();
 const { sendOTPEmail, sendPasswordChangedEmail } = require('./utils/mailer');
 
 async function runTest() {
-  console.log('\n🔧 FleetFly Brevo SMTP Test\n');
-  console.log('BREVO_SMTP_USER:', process.env.BREVO_SMTP_USER ? 'set' : 'missing');
+  console.log('\n🔧 FleetFly Brevo API Test\n');
+  console.log('BREVO_API_KEY:', process.env.BREVO_API_KEY ? 'set' : 'missing');
   console.log('BREVO_FROM:', process.env.BREVO_FROM);
   console.log('');
 
   // Step 1: Verify Brevo configuration
   console.log('Step 1: Verifying Brevo configuration...');
-  const hasConfig = !!(process.env.BREVO_SMTP_USER && process.env.BREVO_SMTP_KEY && process.env.BREVO_FROM);
+  const hasConfig = !!(process.env.BREVO_API_KEY && process.env.BREVO_FROM);
   if (!hasConfig) {
     console.error('❌ Brevo config check failed. Check your .env values.');
     process.exit(1);
