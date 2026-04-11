@@ -8,6 +8,7 @@ const resend = process.env.RESEND_API_KEY
 
 const shouldUseResend = () => mailProvider === 'resend' || mailProvider === 'auto';
 const shouldUseSmtp = () => mailProvider === 'smtp' || mailProvider === 'auto';
+const mailFrom = process.env.MAIL_FROM || process.env.SMTP_USER;
 
 const hasResend = () => {
   const key = process.env.RESEND_API_KEY || '';
@@ -63,7 +64,7 @@ const sendOTPEmail = async (email, otp, name) => {
   try {
     const subject = 'Password Reset OTP - FleetFly';
     const mailOptions = {
-      from: `"FleetFly" <${process.env.SMTP_USER}>`,
+      from: mailFrom,
       to: email,
       subject,
       html: `
@@ -110,7 +111,7 @@ const sendOTPEmail = async (email, otp, name) => {
               </div>
               <p>Best regards,<br><strong>FleetFly Team</strong></p>
             </div>
-            <div class="footer">© ${new Date().getFullYear()} FleetFly · Sent from ${process.env.SMTP_USER}</div>
+            <div class="footer">© ${new Date().getFullYear()} FleetFly · Sent from ${mailFrom}</div>
           </div>
         </body>
         </html>
@@ -148,7 +149,7 @@ const sendPasswordChangedEmail = async (email, name) => {
   try {
     const subject = 'Password Changed Successfully - FleetFly';
     const mailOptions = {
-      from: `"FleetFly" <${process.env.SMTP_USER}>`,
+      from: mailFrom,
       to: email,
       subject,
       html: `
@@ -189,7 +190,7 @@ const sendPasswordChangedEmail = async (email, name) => {
               </ul>
               <p>Best regards,<br><strong>FleetFly Team</strong></p>
             </div>
-            <div class="footer">© ${new Date().getFullYear()} FleetFly · Sent from ${process.env.SMTP_USER}</div>
+            <div class="footer">© ${new Date().getFullYear()} FleetFly · Sent from ${mailFrom}</div>
           </div>
         </body>
         </html>
