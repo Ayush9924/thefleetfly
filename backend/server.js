@@ -18,6 +18,12 @@ const isTestEnv = process.env.NODE_ENV === 'test';
   }
 });
 
+if (process.env.BREVO_API_KEY) {
+  console.log('[STARTUP] ✓ BREVO_API_KEY loaded (HTTP fallback available)');
+} else {
+  console.log('[STARTUP] ℹ BREVO_API_KEY not set (SMTP-only mode)');
+}
+
 if (!process.env.JWT_SECRET) {
   console.error('[STARTUP] MISSING ENV VAR: JWT_SECRET');
 } else {
