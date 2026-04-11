@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import * as maintenanceService from '../services/maintenanceService';
+import * as maintenanceService from '@/services/maintenanceService';
 
 export const useMaintenanceScheduler = () => {
   const [data, setData] = useState({

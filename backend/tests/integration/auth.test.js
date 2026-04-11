@@ -18,7 +18,7 @@ describe('Authentication API', () => {
         });
       
       expect(res.statusCode).toBe(201);
-      expect(res.body).toHaveProperty('_id');
+      expect(res.body).toHaveProperty('user._id');
       expect(res.body).toHaveProperty('token');
     });
 
@@ -76,7 +76,7 @@ describe('Authentication API', () => {
         });
       
       expect(res.statusCode).toBe(401);
-      expect(res.body.message).toBe('Invalid credentials');
+      expect(res.body.message).toBe('Invalid email or password');
     });
   });
 });

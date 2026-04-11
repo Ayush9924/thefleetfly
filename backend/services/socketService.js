@@ -4,14 +4,32 @@
  */
 
 // In-memory location storage (for development)
-const activeLocations = new Map(); // driverId -> { latitude, longitude, speed, heading, timestamp }
-const userSockets = new Map(); // userId -> Set of socket ids
-const onlineUsers = new Map(); // userId -> { socketId, userName, userRole, connectedAt }
+const activeLocations  = new Map(); // driverId -> locationPayload
+const userSockets      = new Map(); // userId   -> Set<socketId>
+const onlineUsers      = new Map(); // userId   -> { socketId, userName … }
+
+// ── Rate-limiter & smart-DB maps (reset on server restart) ────────────────
+const lastUpdateTime   = new Map(); // driverId -> Date.now() of last accepted update
+const lastSavedPos     = new Map(); // driverId -> { lat, lng, ts } of last MongoDB write
+
+// Tuning — change these without touching logic:
+const RATE_LIMIT_MS      = 6_000;  // min 6s between accepted socket updates per driver (client sends every 7s)
+const DB_MIN_DISTANCE_M  = 25;     // only write MongoDB if moved ≥25m
+const DB_MAX_INTERVAL_MS = 60_000; // always write MongoDB every 60s regardless of movement
+
+// Simple haversine for backend DB-write gating (no external dep)
+function haversineBack(lat1, lon1, lat2, lon2) {
+  const R = 6_371_000, r = v => v * Math.PI / 180;
+  const a = Math.sin(r(lat2-lat1)/2)**2 + Math.cos(r(lat1))*Math.cos(r(lat2))*Math.sin(r(lon2-lon1)/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
 
 // Import models for persistence
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const User = require('../models/User');
+const LocationHistory = require('../models/LocationHistory');
+const locationService = require('./locationService');
 
 /**
  * Initialize all Socket.io event handlers
@@ -23,14 +41,7 @@ const socketService = (io) => {
     const userRole = socket.userRole;
     const userName = socket.userName;
 
-    console.log(`\n========== SOCKET CONNECTION ==========`);
-    console.log(`✅ User connected: ${userName} (${userRole})`);
-    console.log(`✅ Socket ID: ${socket.id}`);
-    console.log(`✅ User ID: ${userId}`);
-    console.log(`✅ User Role: ${userRole}`);
-    console.log(`========== END SOCKET CONNECTION ==========\n`);
-
-    // Track user sockets
+    console.log(`✓ ${userName} (${userRole}) connected  [${socket.id}]`);
     if (!userSockets.has(userId)) {
       userSockets.set(userId, new Set());
     }
@@ -89,69 +100,86 @@ const socketService = (io) => {
     });
 
     /**
-     * Driver sends real-time location update
-     * Emitted every 10 seconds with: latitude, longitude, speed, heading, accuracy
+     * Driver sends real-time location update.
+     * 1. Validates coordinates (not accuracy — browser GPS is 50-500m which is fine)
+     * 2. Stores in-memory for instant get_all_locations responses
+     * 3. Saves to MongoDB LocationHistory for persistence
+     * 4. Broadcasts to ALL connected sockets
      */
-    socket.on('driver:location_update', (data) => {
+    socket.on('driver:location_update', async (data) => {
       try {
-        const { driverId, latitude, longitude, speed, heading, accuracy, mileage } = data;
+        const { latitude, longitude, speed, heading, accuracy, mileage } = data;
+        const driverId = data.driverId || socket.userId;
 
-        // Validate coordinates
-        if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
-          console.warn('⚠️  Invalid GPS coordinates:', data);
+        // ── 0. Server-side rate limit ─────────────────────────────────────
+        const nowMs    = Date.now();
+        const lastSeen = lastUpdateTime.get(driverId) || 0;
+        if (nowMs - lastSeen < RATE_LIMIT_MS) {
+          // Accept at most 1 update per RATE_LIMIT_MS per driver (silent drop)
+          return;
+        }
+        lastUpdateTime.set(driverId, nowMs);
+
+        // ── 1. Validate coordinates (accuracy never filtered) ─────────────
+        if (latitude == null || longitude == null ||
+            isNaN(Number(latitude)) || isNaN(Number(longitude))) {
+          console.warn('[BACKEND] ❌ Invalid coordinates — dropping update');
           return;
         }
 
-        // Filter out low accuracy readings (> 50 meters)
-        if (accuracy && accuracy > 50) {
-          console.warn('⚠️  Low accuracy GPS reading, filtering out');
-          return;
-        }
+        const lat = Number(latitude);
+        const lng = Number(longitude);
 
-        // Store in-memory for quick access
-        activeLocations.set(driverId, {
+        const locationPayload = {
           driverId,
-          latitude,
-          longitude,
-          speed: speed || 0,
-          heading: heading || 0,
-          accuracy: accuracy || 0,
-          mileage: mileage || 0,
+          latitude:  lat,
+          longitude: lng,
+          speed:     Number(speed)    || 0,
+          heading:   Number(heading)  || 0,
+          accuracy:  Number(accuracy) || 0,
           timestamp: new Date().toISOString()
-        });
+        };
 
-        // Check for speed alert (120 km/h threshold)
-        if (speed && speed > 120) {
+        // ── 2. Store in-memory ───────────────────────────────────────────────
+        activeLocations.set(driverId, { ...locationPayload, mileage: mileage || 0 });
+
+        // ── 3. Smart MongoDB write ───────────────────────────────────────────
+        // Only write if driver moved ≥25m OR ≥60s since last write.
+        // Drastically reduces DB bills on stationary or slow-moving drivers.
+        try {
+          const saved = lastSavedPos.get(driverId);
+          const distMoved   = saved ? haversineBack(saved.lat, saved.lng, lat, lng) : Infinity;
+          const timeSinceSaved = saved ? nowMs - saved.ts : Infinity;
+          const shouldWrite = distMoved >= DB_MIN_DISTANCE_M || timeSinceSaved >= DB_MAX_INTERVAL_MS;
+
+          if (shouldWrite) {
+            await LocationHistory.create({ driverId, latitude: lat, longitude: lng,
+              speed: Number(speed) || 0, accuracy: Number(accuracy) || 0 });
+            lastSavedPos.set(driverId, { lat, lng, ts: nowMs });
+          }
+        } catch (dbErr) {
+          console.warn('[BACKEND]   ⚠️  MongoDB save failed (non-fatal):', dbErr.message);
+        }
+
+        // ── 4. Speed alert (dispatch room only) ─────────────────────────────
+        if (speed && Number(speed) > 120) {
           io.to('dispatch').emit('vehicle:speed_alert', {
-            driverId,
-            speed,
-            limit: 120,
+            driverId, speed, limit: 120,
             message: `Driver ${driverId} exceeding speed limit: ${speed} km/h`,
             timestamp: new Date()
           });
         }
 
-        // Broadcast location to dispatch team and map viewers
-        io.to('dispatch').emit('driver:location_update', {
-          driverId,
-          latitude,
-          longitude,
-          speed,
-          heading,
-          timestamp: new Date().toISOString()
-        });
+        // ── 5. Broadcast to EVERY connected socket ───────────────────────────
+        io.emit('driver:location_update', locationPayload);
+        console.log(`⇒ location [${driverId.slice(-6)}] ±${Math.round(accuracy||0)}m  →  ${io.engine.clientsCount} clients`);
 
-        // Also broadcast to vehicle-specific room
-        io.to(`vehicle:${data.vehicleId}`).emit('driver:location_update', {
-          driverId,
-          latitude,
-          longitude,
-          speed,
-          heading,
-          timestamp: new Date().toISOString()
-        });
+        // Also push to any vehicle-specific room listeners
+        if (data.vehicleId) {
+          io.to(`vehicle:${data.vehicleId}`).emit('driver:location_update', locationPayload);
+        }
       } catch (error) {
-        console.error('❌ Error in driver:location_update:', error.message);
+        console.error('[BACKEND] ❌ Error in driver:location_update:', error.message, error.stack);
       }
     });
 
@@ -174,28 +202,52 @@ const socketService = (io) => {
     });
 
     /**
-     * Get all active driver locations
+     * Get all active driver locations — returns in-memory activeLocations map.
+     * NOTE: activeLocations is populated ONLY by driver:location_update socket events.
+     * It is reset on server restart. Drivers must re-emit after restart.
      */
     socket.on('map:get_all_locations', () => {
       try {
         const locations = Array.from(activeLocations.values());
         socket.emit('map:all_locations', locations);
       } catch (error) {
-        console.error('❌ Error in map:get_all_locations:', error.message);
+        console.error('Error in map:get_all_locations:', error.message);
       }
     });
 
+
     /**
-     * Driver stops sharing location
+     * Driver stops sharing location.
+     * Cleans up:
+     *  - in-memory maps (activeLocations, lastUpdateTime, lastSavedPos)
+     *  - MongoDB LocationHistory for this driver (session data, not needed after stop)
      */
-    socket.on('driver:stop_tracking', (data) => {
+    socket.on('driver:stop_tracking', async (data) => {
       try {
         const { driverId, vehicleId } = data;
-        socket.leave(`driver:${driverId}`);
-        socket.leave(`vehicle:${vehicleId}`);
-        activeLocations.delete(driverId);
 
-        console.log(`⏹️  Driver ${driverId} stopped location tracking`);
+        // ── 1. Leave socket rooms ────────────────────────────────────────
+        socket.leave(`driver:${driverId}`);
+        if (vehicleId) socket.leave(`vehicle:${vehicleId}`);
+
+        // ── 2. Wipe ALL in-memory state for this driver ───────────────────
+        activeLocations.delete(driverId);
+        lastUpdateTime.delete(driverId);  // reset rate limiter
+        lastSavedPos.delete(driverId);    // reset smart-DB tracker
+        locationService.removeLocation(driverId);
+
+        // ── 3. Delete session location history from MongoDB ────────────────
+        // Location history is ephemeral (session-only). Deleting on stop
+        // keeps the collection lean and reduces atlas storage cost.
+        try {
+          const result = await LocationHistory.deleteMany({ driverId });
+          console.log(`✓ session cleared [${driverId.slice(-6)}]  deleted ${result.deletedCount} history docs`);
+        } catch (dbErr) {
+          console.warn('[BACKEND] ⚠️  Failed to delete LocationHistory:', dbErr.message);
+        }
+
+        // ── 4. Broadcast stop to all clients so admin map removes marker ───
+        io.emit('driver:stop_tracking', { driverId });
 
         io.to('dispatch').emit('notification:new', {
           type: 'tracking_stopped',

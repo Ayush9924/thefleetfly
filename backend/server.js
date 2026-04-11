@@ -8,9 +8,12 @@ const cors = require('cors');
 const path = require('path');
 const morgan = require('morgan');
 const fs = require('fs');
+const isTestEnv = process.env.NODE_ENV === 'test';
 
 // Connect to database
-connectDB();
+if (!isTestEnv) {
+  connectDB();
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -58,29 +61,31 @@ const initializeSocket = () => {
 };
 
 // Initialize Socket.io
-if (process.env.REDIS_URL) {
-  const { createAdapter } = require('@socket.io/redis-adapter');
-  const { createClient } = require('redis');
-  
-  const redisClientPub = createClient({ url: process.env.REDIS_URL });
-  const redisClientSub = createClient({ url: process.env.REDIS_URL });
-  
-  Promise.all([redisClientPub.connect(), redisClientSub.connect()])
-    .then(() => {
-      io = new socketIo.Server(server, {
-        ...socketConfig,
-        adapter: createAdapter({ pubClient: redisClientPub, subClient: redisClientSub }),
+if (!isTestEnv) {
+  if (process.env.REDIS_URL) {
+    const { createAdapter } = require('@socket.io/redis-adapter');
+    const { createClient } = require('redis');
+    
+    const redisClientPub = createClient({ url: process.env.REDIS_URL });
+    const redisClientSub = createClient({ url: process.env.REDIS_URL });
+    
+    Promise.all([redisClientPub.connect(), redisClientSub.connect()])
+      .then(() => {
+        io = new socketIo.Server(server, {
+          ...socketConfig,
+          adapter: createAdapter({ pubClient: redisClientPub, subClient: redisClientSub }),
+        });
+        console.log('✅ Socket.io initialized with Redis adapter');
+      })
+      .catch(err => {
+        console.error('❌ Redis connection failed:', err.message);
+        console.log('🔄 Falling back to in-memory adapter');
+        initializeSocket();
       });
-      console.log('✅ Socket.io initialized with Redis adapter');
-    })
-    .catch(err => {
-      console.error('❌ Redis connection failed:', err.message);
-      console.log('🔄 Falling back to in-memory adapter');
-      initializeSocket();
-    });
-} else {
-  // Use in-memory adapter for development
-  initializeSocket();
+  } else {
+    // Use in-memory adapter for development
+    initializeSocket();
+  }
 }
 
 // Middleware
@@ -149,6 +154,8 @@ app.use('/api/fuels', require('./routes/fuelLogRoutes'));
 app.use('/api/routes', require('./routes/routeRoutes'));
 app.use('/api/reports', require('./routes/reportRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
+app.use('/api/location', require('./routes/locationRoutes'));
+
 
 // Serve static files (for uploaded images)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -163,31 +170,33 @@ if (fs.existsSync(viteDist)) {
   app.use(express.static(craBuild));
 }
 
-// Socket.io Authentication & Event Handler Setup
-const socketAuth = require('./middleware/socketAuth');
-const socketService = require('./services/socketService');
+if (!isTestEnv) {
+  // Socket.io Authentication & Event Handler Setup
+  const socketAuth = require('./middleware/socketAuth');
+  const socketService = require('./services/socketService');
 
-// Setup socket handlers (io may not be ready immediately if using Redis, so add after creation)
-const setupSocketIfReady = setInterval(() => {
-  if (io) {
-    clearInterval(setupSocketIfReady);
-    // Apply socket authentication middleware
-    io.use(socketAuth);
-    // Initialize socket event handlers
-    socketService(io);
-    console.log('✅ Socket.io authentication and services initialized');
-  }
-}, 100);
+  // Setup socket handlers (io may not be ready immediately if using Redis, so add after creation)
+  const setupSocketIfReady = setInterval(() => {
+    if (io) {
+      clearInterval(setupSocketIfReady);
+      // Apply socket authentication middleware
+      io.use(socketAuth);
+      // Initialize socket event handlers
+      socketService(io);
+      console.log('✅ Socket.io authentication and services initialized');
+    }
+  }, 100);
 
-// Initialize maintenance background jobs asynchronously
-setImmediate(() => {
-  try {
-    const { initializeMaintenanceCrons } = require('./services/maintenanceCron');
-    initializeMaintenanceCrons();
-  } catch (err) {
-    console.error('Warning: Failed to initialize maintenance crons:', err.message);
-  }
-});
+  // Initialize maintenance background jobs asynchronously
+  setImmediate(() => {
+    try {
+      const { initializeMaintenanceCrons } = require('./services/maintenanceCron');
+      initializeMaintenanceCrons();
+    } catch (err) {
+      console.error('Warning: Failed to initialize maintenance crons:', err.message);
+    }
+  });
+}
 
 // Error handling middleware (must be last)
 app.use(errorHandler);
@@ -205,20 +214,26 @@ app.use((req, res) => {
   }
 });
 
-// Use env PORT or 5000
-const PORT = process.env.PORT || 5001;
-const serverInstance = server.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
+// Avoid binding a network port during tests; supertest will use the app directly.
+let serverInstance = null;
+if (!isTestEnv) {
+  const PORT = process.env.PORT || 5001;
+  serverInstance = server.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+  });
 
-serverInstance.on('error', (err) => {
-  if (err && err.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} is already in use. Set PORT in .env or free the port.`);
-    process.exit(1);
-  } else {
-    throw err;
-  }
-});
+  serverInstance.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use. Set PORT in .env or free the port.`);
+      process.exit(1);
+    } else {
+      throw err;
+    }
+  });
+}
 
-// Export for potential use in services and testing
-module.exports = { app, server, io };
+// Export app directly for tests while still exposing internals when needed.
+module.exports = app;
+module.exports.server = server;
+module.exports.io = io;
+module.exports.serverInstance = serverInstance;

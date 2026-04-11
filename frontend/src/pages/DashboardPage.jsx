@@ -1,1475 +1,333 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, Link } from "react-router-dom";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from "recharts";
 import {
-  MapPin,
-  Truck,
-  User,
-  Wrench,
-  Fuel,
-  Clock,
-  AlertTriangle,
-  Calendar,
-  ArrowUpRight,
-  ArrowDownRight,
-  ChevronRight,
-  Bell,
-  CheckCircle,
-  Info,
-  LogOut,
-  Settings,
-  User as UserIcon,
-  MessageSquare,
-  Sparkles,
-  TrendingUp,
-  LayoutDashboard,
-  ChevronLeft,
+  MapPin, Truck, User, Wrench, Fuel, Clock,
+  AlertTriangle, Calendar, ArrowUpRight, ArrowDownRight,
+  ChevronRight, Bell, CheckCircle, MessageSquare,
+  TrendingUp, LayoutDashboard, LogOut, Settings,
 } from "lucide-react";
-import { format, subDays, startOfWeek, endOfWeek } from "date-fns";
-import { Button } from "../components/ui/button";
-import { Skeleton } from "../components/ui/skeleton";
-import { useAuth } from "../contexts/AuthContext";
+import { startOfWeek, endOfWeek } from "date-fns";
+import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
 
-// API services for real-time data
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
+// ─── API helpers ──────────────────────────────────────────────────────────────
+const API = import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
-const getAuthToken = () => {
-  return localStorage.getItem("token");
+const authFetch = async (url) => {
+  const token = localStorage.getItem("token");
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  return res.json();
 };
 
-const fetchWithAuth = async (url) => {
-  const token = getAuthToken();
-  const headers = {
-    "Content-Type": "application/json",
-  };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
+const fetchArr = (url) => authFetch(url).then((d) => (Array.isArray(d) ? d : [])).catch(() => []);
 
-  const response = await fetch(url, { headers });
-  if (!response.ok) {
-    console.error(`API Error: ${response.status} ${response.statusText}`);
-    throw new Error(`Failed to fetch from ${url}`);
-  }
-  return await response.json();
-};
+const WEEK = { from: startOfWeek(new Date()).toISOString(), to: endOfWeek(new Date()).toISOString() };
 
-const getVehicles = async () => {
-  try {
-    console.log("📍 Fetching vehicles...");
-    const data = await fetchWithAuth(`${API_BASE_URL}/vehicles`);
-    console.log("✅ Vehicles fetched:", data);
-    return Array.isArray(data) ? data : [];
-  } catch (error) {
-    console.error("❌ Error fetching vehicles:", error);
-    return [];
-  }
-};
-
-const getDrivers = async () => {
-  try {
-    console.log("👥 Fetching drivers...");
-    const data = await fetchWithAuth(`${API_BASE_URL}/drivers`);
-    console.log("✅ Drivers fetched:", data);
-    return Array.isArray(data) ? data : [];
-  } catch (error) {
-    console.error("❌ Error fetching drivers:", error);
-    return [];
-  }
-};
-
-const getAssignments = async () => {
-  try {
-    console.log("📋 Fetching assignments...");
-    const data = await fetchWithAuth(`${API_BASE_URL}/assignments`);
-    console.log("✅ Assignments fetched:", data);
-    return Array.isArray(data) ? data : [];
-  } catch (error) {
-    console.error("❌ Error fetching assignments:", error);
-    return [];
-  }
-};
-
-const getFuelLogs = async ({ from, to }) => {
-  try {
-    console.log("⛽ Fetching fuel logs...");
-    const params = new URLSearchParams();
-    if (from) params.append("from", from);
-    if (to) params.append("to", to);
-    const data = await fetchWithAuth(
-      `${API_BASE_URL}/fuels?${params.toString()}`
-    );
-    console.log("✅ Fuel logs fetched:", data);
-    return Array.isArray(data) ? data : [];
-  } catch (error) {
-    console.error("❌ Error fetching fuel logs:", error);
-    return [];
-  }
-};
-
-const getMaintenance = async ({ from, to }) => {
-  try {
-    console.log("🔧 Fetching maintenance records...");
-    const data = await fetchWithAuth(`${API_BASE_URL}/maintenance`);
-    console.log("✅ Maintenance records fetched:", data);
-
-    if (!Array.isArray(data)) {
-      console.warn("Maintenance data is not an array:", data);
-      return [];
-    }
-
-    // Sort by most recent first and return all records
-    // This way we show upcoming/scheduled maintenance even if date filter doesn't match
-    return data.sort((a, b) => {
-      const dateA = new Date(a?.dueDate || a?.createdAt || 0);
-      const dateB = new Date(b?.dueDate || b?.createdAt || 0);
-      return dateB - dateA;
-    });
-  } catch (error) {
-    console.error("❌ Error fetching maintenance:", error);
-    return [];
-  }
-};
-
-const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
-
-// Mock fuel cost trend data
-const MOCK_FUEL_TREND = [
-  { date: "Mon", cost: 245.5 },
-  { date: "Tue", cost: 318.75 },
-  { date: "Wed", cost: 275.25 },
-  { date: "Thu", cost: 392.0 },
-  { date: "Fri", cost: 425.5 },
-  { date: "Sat", cost: 289.75 },
-  { date: "Sun", cost: 198.5 },
+const MOCK_FUEL = [
+  { date: "Mon", cost: 245 }, { date: "Tue", cost: 319 }, { date: "Wed", cost: 275 },
+  { date: "Thu", cost: 392 }, { date: "Fri", cost: 426 }, { date: "Sat", cost: 290 }, { date: "Sun", cost: 198 },
 ];
 
-export default function DashboardPage() {
-  const [fuelData, setFuelData] = useState([]);
-  const [maintenanceData, setMaintenanceData] = useState([]);
-  const [vehicleStatusData, setVehicleStatusData] = useState([]);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [scrollPosition, setScrollPosition] = useState(0);
-  const [renderError, setRenderError] = useState(false);
-  const scrollContainerRef = useRef(null);
+const PIE_COLOR = { Active: "#10b981", Maintenance: "#f59e0b", default: "#2563eb" };
 
+const fade = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.4, staggerChildren: 0.07 } },
+};
+
+// ─── Quick-access feature cards ───────────────────────────────────────────────
+const FEATURES = [
+  { to: "/dashboard/tracking",      Icon: MapPin,        color: "bg-blue-600",   label: "Live Tracking",  desc: "Real-time vehicle locations",   cta: "View Tracking"       },
+  { to: "/dashboard/messages",      Icon: MessageSquare, color: "bg-emerald-600",label: "Messages",       desc: "Chat with drivers & team",      cta: "Open Chat"           },
+  { to: "/dashboard/maintenance",   Icon: Wrench,        color: "bg-orange-600", label: "Maintenance",    desc: "Schedule & track repairs",      cta: "Manage Maintenance"  },
+  { to: "/dashboard/notifications", Icon: Bell,          color: "bg-amber-500",  label: "Notifications",  desc: "Real-time fleet alerts",        cta: "View Alerts"         },
+  { to: "/dashboard/vehicles",      Icon: Truck,         color: "bg-purple-600", label: "Vehicles",       desc: "Manage fleet vehicles",         cta: "View Fleet"          },
+];
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+function KpiCard({ title, value, Icon, trend = { value: 0, isPositive: true }, loading, warning }) {
+  return (
+    <motion.div variants={fade} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{title}</p>
+        <Icon className={`h-4 w-4 ${warning ? "text-red-500" : "text-blue-500"}`} />
+      </div>
+      {loading ? (
+        <div className="h-8 w-20 bg-gray-200 rounded animate-pulse" />
+      ) : (
+        <p className={`text-2xl font-black leading-none ${warning ? "text-red-600" : "text-gray-900"}`}>
+          {value}
+          {warning && <AlertTriangle className="inline h-4 w-4 ml-1 animate-pulse" />}
+        </p>
+      )}
+      <div className={`text-xs font-semibold flex items-center gap-0.5 ${trend.isPositive ? "text-emerald-600" : "text-red-500"}`}>
+        {trend.isPositive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+        {Math.abs(trend.value).toFixed(1)}% vs last week
+      </div>
+    </motion.div>
+  );
+}
+
+function FeatureCard({ to, Icon, color, label, desc, cta }) {
+  return (
+    <Link to={to} className="block group">
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 cursor-pointer">
+        <div className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${color} mb-3`}>
+          <Icon className="h-4 w-4 text-white" />
+        </div>
+        <p className="font-semibold text-gray-900 text-sm">{label}</p>
+        <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+        <div className="flex items-center gap-1 text-blue-600 text-xs font-semibold mt-3 group-hover:gap-2 transition-all">
+          {cta} <ChevronRight className="h-3 w-3" />
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+export default function DashboardPage() {
   const navigate = useNavigate();
   const { logout, currentUser: user } = useAuth();
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [fuelData, setFuelData] = useState(MOCK_FUEL);
+  const [vehicleStatusData, setVehicleStatusData] = useState([]);
 
-  // Scroll handler for Real-Time Features
-  const handleScroll = (direction) => {
-    if (scrollContainerRef.current) {
-      const scrollAmount = 350; // Width of card + gap
-      const newPosition =
-        direction === "left"
-          ? scrollPosition - scrollAmount
-          : scrollPosition + scrollAmount;
-      scrollContainerRef.current.scrollLeft = newPosition;
-      setScrollPosition(newPosition);
-    }
+  const { data: vehicles = [], isLoading: vehiclesLoading } = useQuery({ queryKey: ["vehicles"], queryFn: () => fetchArr(`${API}/vehicles`), refetchInterval: 5000 });
+  const { data: drivers = [], isLoading: driversLoading } = useQuery({ queryKey: ["drivers"], queryFn: () => fetchArr(`${API}/drivers`), refetchInterval: 5000 });
+  const { data: assignments = [], isLoading: assignmentsLoading } = useQuery({ queryKey: ["assignments"], queryFn: () => fetchArr(`${API}/assignments`), refetchInterval: 5000 });
+  const { data: fuelLogs = [], isLoading: fuelLogsLoading } = useQuery({ queryKey: ["fuel-logs", WEEK], queryFn: () => fetchArr(`${API}/fuels?from=${WEEK.from}&to=${WEEK.to}`), refetchInterval: 5000 });
+  const { data: maintenanceRecords = [], isLoading: maintenanceLoading } = useQuery({ queryKey: ["maintenance", WEEK], queryFn: () => fetchArr(`${API}/maintenance`), refetchInterval: 5000 });
+  const { data: upcomingMaint = [] } = useQuery({ queryKey: ["maintenance-upcoming"], queryFn: () => fetchArr(`${API}/maintenance/scheduled/upcoming?days=30`), refetchInterval: 5000 });
+
+  // KPIs
+  const totalVehicles       = vehicles.length;
+  const activeVehicles      = vehicles.filter(v => v?.status === "active").length;
+  const availableDrivers    = drivers.filter(d => d?.status === "available").length;
+  const activeAssignments   = assignments.filter(a => a?.isActive).length;
+  const inMaintenance       = vehicles.filter(v => v?.status === "maintenance").length;
+  const totalFuelCost       = fuelLogs.length ? fuelLogs.reduce((s, l) => s + (parseFloat(l?.cost) || 0), 0) : 2145.5;
+  const upcomingCount       = upcomingMaint.length;
+
+  const trend = (cur, prev) => {
+    if (!prev) return { value: 0, isPositive: true };
+    const pct = ((cur - prev) / prev) * 100;
+    return { value: Math.round(pct * 10) / 10, isPositive: pct >= 0 };
   };
 
-  // Fetch data with real-time updates
-  const { data: vehicles, isLoading: vehiclesLoading } = useQuery({
-    queryKey: ["vehicles"],
-    queryFn: getVehicles,
-    refetchInterval: 5000, // Refetch every 5 seconds
-    staleTime: 2000,
-  });
-
-  const { data: drivers, isLoading: driversLoading } = useQuery({
-    queryKey: ["drivers"],
-    queryFn: getDrivers,
-    refetchInterval: 5000,
-    staleTime: 2000,
-  });
-
-  const { data: assignments, isLoading: assignmentsLoading } = useQuery({
-    queryKey: ["assignments"],
-    queryFn: getAssignments,
-    refetchInterval: 5000,
-    staleTime: 2000,
-  });
-
-  const { data: fuelLogs, isLoading: fuelLogsLoading } = useQuery({
-    queryKey: [
-      "fuel-logs",
-      {
-        from: startOfWeek(new Date()).toISOString(),
-        to: endOfWeek(new Date()).toISOString(),
-      },
-    ],
-    queryFn: () =>
-      getFuelLogs({
-        from: startOfWeek(new Date()).toISOString(),
-        to: endOfWeek(new Date()).toISOString(),
-      }),
-    refetchInterval: 5000,
-    staleTime: 2000,
-  });
-
-  const { data: maintenanceRecords, isLoading: maintenanceLoading } = useQuery({
-    queryKey: [
-      "maintenance",
-      {
-        from: startOfWeek(new Date()).toISOString(),
-        to: endOfWeek(new Date()).toISOString(),
-      },
-    ],
-    queryFn: () =>
-      getMaintenance({
-        from: startOfWeek(new Date()).toISOString(),
-        to: endOfWeek(new Date()).toISOString(),
-      }),
-    refetchInterval: 5000,
-    staleTime: 2000,
-  });
-
-  // Fetch upcoming scheduled maintenance for KPI card
-  const {
-    data: upcomingScheduledMaintenance = [],
-    isLoading: upcomingMaintenanceLoading,
-  } = useQuery({
-    queryKey: ["maintenance-scheduled-upcoming"],
-    queryFn: async () => {
-      try {
-        const data = await fetchWithAuth(
-          `${API_BASE_URL}/maintenance/scheduled/upcoming?days=30`
-        );
-        return Array.isArray(data) ? data : [];
-      } catch (error) {
-        console.error("Error fetching upcoming maintenance:", error);
-        return [];
-      }
-    },
-    refetchInterval: 5000,
-    staleTime: 2000,
-  });
-
-  // Process fuel chart data
+  // Charts
   useEffect(() => {
-    if (fuelLogs && fuelLogs.length > 0) {
-      try {
-        const dailyTotals = fuelLogs.reduce((acc, log) => {
-          try {
-            const dateValue = log?.date || log?.createdAt;
-            if (!dateValue) return acc;
-
-            const dateObj = new Date(dateValue);
-            if (isNaN(dateObj.getTime())) return acc;
-
-            // Use toLocaleDateString instead of date-fns format
-            const date = dateObj.toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-            });
-
-            if (!acc[date]) acc[date] = 0;
-            const cost = parseFloat(log?.cost) || 0;
-            if (!isNaN(cost)) acc[date] += cost;
-          } catch (error) {
-            console.warn("Invalid date in fuel log:", error);
-          }
-          return acc;
-        }, {});
-
-        setFuelData(
-          Object.entries(dailyTotals).map(([date, cost]) => ({ date, cost }))
-        );
-      } catch (error) {
-        console.error("Error processing fuel data:", error);
-        setFuelData([]);
-      }
-    } else {
-      // Use mock data when no real data available
-      setFuelData(MOCK_FUEL_TREND);
+    if (fuelLogs.length) {
+      const daily = fuelLogs.reduce((acc, l) => {
+        const dateStr = l?.date || l?.createdAt;
+        if (!dateStr) return acc;
+        const d = new Date(dateStr);
+        if (isNaN(d)) return acc;
+        const key = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        acc[key] = (acc[key] || 0) + (parseFloat(l?.cost) || 0);
+        return acc;
+      }, {});
+      setFuelData(Object.entries(daily).map(([date, cost]) => ({ date, cost })));
     }
   }, [fuelLogs]);
 
-  // Process maintenance chart data
   useEffect(() => {
-    if (Array.isArray(maintenanceRecords) && maintenanceRecords.length > 0) {
-      try {
-        const byType = maintenanceRecords.reduce((acc, record) => {
-          try {
-            const type = record?.description?.split(" ")[0] || "Other";
-            const cost = parseFloat(record?.cost) || 0;
-            if (!isNaN(cost)) {
-              if (!acc[type]) acc[type] = 0;
-              acc[type] += cost;
-            }
-          } catch (error) {
-            console.warn("Error processing maintenance record:", error);
-          }
-          return acc;
-        }, {});
-
-        setMaintenanceData(
-          Object.entries(byType).map(([type, cost]) => ({ type, cost }))
-        );
-      } catch (error) {
-        console.error("Error processing maintenance data:", error);
-        setMaintenanceData([]);
-      }
-    }
-  }, [maintenanceRecords]);
-
-  // Process vehicle status data
-  useEffect(() => {
-    if (Array.isArray(vehicles) && vehicles.length > 0) {
-      try {
-        const statusCounts = vehicles.reduce((acc, vehicle) => {
-          acc[vehicle?.status] = (acc[vehicle?.status] || 0) + 1;
-          return acc;
-        }, {});
-
-        setVehicleStatusData(
-          Object.entries(statusCounts).map(([status, count]) => ({
-            name: status?.charAt(0).toUpperCase() + status?.slice(1),
-            value: count,
-          }))
-        );
-      } catch (error) {
-        console.error("Error processing vehicle status data:", error);
-        setVehicleStatusData([]);
-      }
+    if (vehicles.length) {
+      const counts = vehicles.reduce((acc, v) => { acc[v?.status] = (acc[v?.status] || 0) + 1; return acc; }, {});
+      setVehicleStatusData(Object.entries(counts).map(([status, value]) => ({ name: status?.charAt(0).toUpperCase() + status?.slice(1), value })));
     }
   }, [vehicles]);
 
-  // Calculate KPIs with real data
-  const totalVehicles = Array.isArray(vehicles) ? vehicles.length : 0;
-  const activeVehicles = Array.isArray(vehicles)
-    ? vehicles.filter((v) => v?.status === "active")?.length || 0
-    : 0;
-  const availableDrivers = Array.isArray(drivers)
-    ? drivers.filter((d) => d?.status === "available")?.length || 0
-    : 0;
-  const activeAssignments = Array.isArray(assignments)
-    ? assignments.filter((a) => a?.isActive)?.length || 0
-    : 0;
-  const vehiclesInMaintenance = Array.isArray(vehicles)
-    ? vehicles.filter((v) => v?.status === "maintenance")?.length || 0
-    : 0;
+  const handleLogout = async () => { await logout(); navigate("/login"); };
 
-  const totalFuelCost = Array.isArray(fuelLogs) && fuelLogs.length > 0
-    ? fuelLogs.reduce((sum, log) => {
-        const cost = parseFloat(log?.cost) || 0;
-        return !isNaN(cost) ? sum + cost : sum;
-      }, 0)
-    : 2145.5; // Mock data: Total fuel cost for the week
+  const weekLabel = `${startOfWeek(new Date()).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${endOfWeek(new Date()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 
-  const totalMaintenanceCost = Array.isArray(maintenanceRecords)
-    ? maintenanceRecords.reduce((sum, rec) => {
-        const cost = parseFloat(rec?.cost) || 0;
-        return !isNaN(cost) ? sum + cost : sum;
-      }, 0)
-    : 0;
-
-  // Get upcoming maintenance count from scheduled maintenance data
-  const upcomingMaintenance = Array.isArray(upcomingScheduledMaintenance)
-    ? upcomingScheduledMaintenance.length
-    : 0;
-
-  // Calculate trends (using percentage change calculation)
-  const calculateTrend = (current, previous) => {
-    try {
-      if (!Number.isFinite(current) || !Number.isFinite(previous)) {
-        return { value: 0, isPositive: true };
-      }
-      if (previous === 0) return { value: 0, isPositive: current >= 0 };
-      const change = ((current - previous) / previous) * 100;
-      const value = Math.round(change * 10) / 10;
-      if (!Number.isFinite(value)) return { value: 0, isPositive: true };
-      return { value, isPositive: change >= 0 };
-    } catch (error) {
-      console.warn("Error calculating trend:", error);
-      return { value: 0, isPositive: true };
-    }
-  };
-
-  // Placeholder previous values for trend - in production, fetch from backend
-  const vehicleTrend = calculateTrend(
-    totalVehicles,
-    totalVehicles > 0 ? totalVehicles - 1 : 3
-  );
-  const driverTrend = calculateTrend(
-    availableDrivers,
-    availableDrivers > 0 ? availableDrivers + 1 : 1
-  );
-  const assignmentTrend = calculateTrend(
-    activeAssignments,
-    activeAssignments > 0 ? activeAssignments - 1 : 2
-  );
-  const maintenanceTrend = calculateTrend(
-    vehiclesInMaintenance,
-    vehiclesInMaintenance > 0 ? vehiclesInMaintenance - 1 : 1
-  );
-  const fuelCostTrend = calculateTrend(
-    totalFuelCost,
-    2050.0 // Mock previous week cost
-  );
-  const upcomingTrend = calculateTrend(upcomingMaintenance, 1);
-
-  // Handle logout
-  const handleLogout = async () => {
-    try {
-      await logout();
-      navigate("/login");
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
-  };
-
-  // Close menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showUserMenu && !event.target.closest(".user-menu")) {
-        setShowUserMenu(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showUserMenu]);
-
-  try {
-    return (
-      <div className="min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 sm:p-6 lg:p-8 relative overflow-hidden">
-        {/* Decorative background blur effects */}
-        <div className="absolute top-20 right-20 w-96 h-96 bg-blue-400/30 rounded-full blur-3xl animate-pulse" />
-        <div
-          className="absolute bottom-20 left-20 w-96 h-96 bg-purple-400/30 rounded-full blur-3xl animate-pulse"
-          style={{ animationDelay: "1s" }}
-        />
-
-        <div className="relative z-10 space-y-8">
-          {/* Header with animated icon */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="relative z-40 overflow-visible bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl p-6 sm:p-8 border border-white/20"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div className="flex items-center gap-4">
-                {/* Animated Dashboard Icon */}
-                <motion.div
-                  animate={{
-                    rotate: [0, 5, 0, -5, 0],
-                    scale: [1, 1.05, 1, 1.05, 1],
-                  }}
-                  transition={{
-                    duration: 4,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
-                  className="bg-linear-to-br from-blue-600 to-indigo-600 p-4 rounded-2xl shadow-lg"
-                >
-                  <LayoutDashboard className="h-8 w-8 text-white" />
-                </motion.div>
-
-                <div>
-                  <h1 className="text-3xl sm:text-4xl font-black tracking-tight bg-linear-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                    Dashboard
-                  </h1>
-                  <p className="text-sm text-gray-600 mt-1">
-                    Welcome back, {user?.name || "User"}!
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {/* Date Range */}
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  className="flex items-center gap-2 bg-linear-to-r from-blue-50 to-indigo-50 border border-blue-200/50 rounded-xl px-4 py-2.5 shadow-sm"
-                >
-                  <Calendar className="h-5 w-5 text-blue-600" />
-                  <span className="text-sm text-gray-700 font-semibold">
-                    {startOfWeek(new Date()).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })}{" "}
-                    –{" "}
-                    {endOfWeek(new Date()).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </span>
-                </motion.div>
-
-                {/* User Menu */}
-                <div className="relative user-menu z-50">
-                  <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex items-center gap-2 bg-linear-to-r from-blue-50 to-indigo-50 border border-blue-200/50 hover:bg-blue-100 rounded-xl px-4 py-2.5 shadow-sm font-semibold"
-                      onClick={() => setShowUserMenu(!showUserMenu)}
-                    >
-                      <UserIcon className="h-5 w-5 text-blue-600" />
-                      <span className="hidden sm:inline text-sm">
-                        {user?.name || "User"}
-                      </span>
-                    </Button>
-                  </motion.div>
-
-                  {showUserMenu && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      className="absolute right-0 mt-3 w-56 bg-white/98 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200 py-2 z-100"
-                    >
-                      <div className="px-4 py-3 border-b border-gray-200">
-                        <p className="text-sm font-bold text-gray-900 truncate">
-                          {user?.name || "User"}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1 truncate">
-                          {user?.email || "user@example.com"}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          navigate("/profile");
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-linear-to-r hover:from-blue-50 hover:to-indigo-50 flex items-center gap-3 font-medium transition-all"
-                      >
-                        <Settings className="h-4 w-4 text-blue-600" />
-                        Profile Settings
-                      </button>
-                      <button
-                        onClick={handleLogout}
-                        className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 font-medium transition-all rounded-b-2xl"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        Sign Out
-                      </button>
-                    </motion.div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-            <KpiCard
-              title="Total Vehicles"
-              value={totalVehicles}
-              icon={Truck}
-              trend={vehicleTrend}
-              loading={vehiclesLoading}
-              color="blue"
-            />
-            <KpiCard
-              title="Available Drivers"
-              value={availableDrivers}
-              icon={User}
-              trend={driverTrend}
-              loading={driversLoading}
-              color="green"
-            />
-            <KpiCard
-              title="Active Assignments"
-              value={activeAssignments}
-              icon={MapPin}
-              trend={assignmentTrend}
-              loading={assignmentsLoading}
-              color="indigo"
-            />
-            <KpiCard
-              title="In Maintenance"
-              value={vehiclesInMaintenance}
-              icon={Wrench}
-              trend={maintenanceTrend}
-              loading={vehiclesLoading}
-              warning={vehiclesInMaintenance > 0}
-              color="amber"
-            />
-            <KpiCard
-              title="Fuel Cost This Week"
-              value={`$${totalFuelCost.toFixed(2)}`}
-              icon={Fuel}
-              trend={fuelCostTrend}
-              loading={fuelLogsLoading}
-              color="red"
-            />
-            <KpiCard
-              title="Upcoming Maintenance"
-              value={upcomingMaintenance}
-              icon={Clock}
-              trend={upcomingTrend}
-              loading={upcomingMaintenanceLoading}
-              warning={upcomingMaintenance > 0}
-              color="purple"
-            />
+  return (
+    <div className="space-y-6 p-4 sm:p-6 max-w-screen-xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600">
+            <LayoutDashboard className="h-5 w-5 text-white" />
           </div>
-
-          {/* Quick Access Cards */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.6 }}
-            className="mb-8"
-          >
-            <div className="flex items-center gap-3 mb-6">
-              <motion.div
-                animate={{ rotate: [0, 10, 0, -10, 0] }}
-                transition={{ duration: 3, repeat: Infinity }}
-                className="bg-linear-to-br from-blue-600 to-indigo-600 p-3 rounded-xl shadow-lg"
-              >
-                <Sparkles className="h-6 w-6 text-white" />
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
+            <p className="text-sm text-gray-500">Welcome back, {user?.name || "User"}!</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5">
+            <Calendar className="h-4 w-4 text-blue-500" /> {weekLabel}
+          </div>
+          <div className="relative">
+            <button onClick={() => setShowUserMenu(!showUserMenu)} className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 transition-colors">
+              <User className="h-4 w-4 text-blue-600" /> <span className="hidden sm:inline">{user?.name || "User"}</span>
+            </button>
+            {showUserMenu && (
+              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+                className="absolute right-0 mt-2 w-52 rounded-xl border border-gray-200 bg-white shadow-lg py-2 z-50">
+                <div className="px-4 py-2 border-b border-gray-100">
+                  <p className="text-sm font-bold text-gray-900 truncate">{user?.name}</p>
+                  <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                </div>
+                <button onClick={() => { setShowUserMenu(false); navigate("/profile"); }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                  <Settings className="h-4 w-4 text-blue-500" /> Profile Settings
+                </button>
+                <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2">
+                  <LogOut className="h-4 w-4" /> Sign Out
+                </button>
               </motion.div>
-              <h2 className="text-2xl font-black text-gray-900">
-                Real-Time Features
-              </h2>
-            </div>
-
-            {/* For Mobile: Grid Layout, For Desktop: Scrollable Container with Controls */}
-            <div className="hidden md:block relative group">
-              {/* Left Scroll Button - Hidden on Mobile */}
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handleScroll("left")}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 backdrop-blur-xl hover:bg-white shadow-xl rounded-full p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 border border-white/20"
-              >
-                <ChevronLeft className="h-5 w-5 text-blue-600" />
-              </motion.button>
-
-              {/* Right Scroll Button - Hidden on Mobile */}
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handleScroll("right")}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-white/90 backdrop-blur-xl hover:bg-white shadow-xl rounded-full p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 border border-white/20"
-              >
-                <ChevronRight className="h-5 w-5 text-blue-600" />
-              </motion.button>
-
-              {/* Scrollable Cards Container - Desktop */}
-              <div
-                ref={scrollContainerRef}
-                className="flex gap-6 overflow-x-hidden scroll-smooth pb-2"
-              >
-                {/* Card 1: Live Tracking */}
-                <Link
-                  to="/dashboard/tracking"
-                  className="no-underline min-w-max"
-                >
-                  <motion.div
-                    whileHover={{ scale: 1.03, y: -5 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <Card className="w-80 h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
-                      <div className="absolute inset-0 bg-linear-to-br from-blue-500/10 to-indigo-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <CardHeader className="pb-3 relative z-10">
-                        <CardTitle className="flex items-center gap-3 text-lg font-bold">
-                          <div className="bg-linear-to-br from-blue-500 to-indigo-600 p-2.5 rounded-xl">
-                            <MapPin className="h-5 w-5 text-white" />
-                          </div>
-                          Live Tracking
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="relative z-10">
-                        <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                          Real-time vehicle locations and driver tracking with
-                          live updates
-                        </p>
-                        <div className="flex items-center text-blue-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
-                          View Tracking <ChevronRight className="h-4 w-4" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                </Link>
-
-                {/* Card 2: Messages */}
-                <Link
-                  to="/dashboard/messages"
-                  className="no-underline min-w-max"
-                >
-                  <motion.div
-                    whileHover={{ scale: 1.03, y: -5 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <Card className="w-80 h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
-                      <div className="absolute inset-0 bg-linear-to-br from-emerald-500/10 to-teal-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <CardHeader className="pb-3 relative z-10">
-                        <CardTitle className="flex items-center gap-3 text-lg font-bold">
-                          <div className="bg-linear-to-br from-emerald-500 to-teal-600 p-2.5 rounded-xl">
-                            <MessageSquare className="h-5 w-5 text-white" />
-                          </div>
-                          Messages
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="relative z-10">
-                        <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                          Real-time chat with drivers, managers, and team
-                          members
-                        </p>
-                        <div className="flex items-center text-emerald-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
-                          Open Chat <ChevronRight className="h-4 w-4" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                </Link>
-
-                {/* Card 3: Maintenance */}
-                <Link
-                  to="/dashboard/maintenance"
-                  className="no-underline min-w-max"
-                >
-                  <motion.div
-                    whileHover={{ scale: 1.03, y: -5 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <Card className="w-80 h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
-                      <div className="absolute inset-0 bg-linear-to-br from-orange-500/10 to-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <CardHeader className="pb-3 relative z-10">
-                        <CardTitle className="flex items-center gap-3 text-lg font-bold">
-                          <div className="bg-linear-to-br from-orange-500 to-red-600 p-2.5 rounded-xl">
-                            <Wrench className="h-5 w-5 text-white" />
-                          </div>
-                          Maintenance
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="relative z-10">
-                        <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                          Schedule and track vehicle maintenance tasks and
-                          repairs
-                        </p>
-                        <div className="flex items-center text-orange-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
-                          Manage Maintenance{" "}
-                          <ChevronRight className="h-4 w-4" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                </Link>
-
-                {/* Card 4: Notifications */}
-                <Link
-                  to="/dashboard/notifications"
-                  className="no-underline min-w-max"
-                >
-                  <motion.div
-                    whileHover={{ scale: 1.03, y: -5 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <Card className="w-80 h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
-                      <div className="absolute inset-0 bg-linear-to-br from-amber-500/10 to-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <CardHeader className="pb-3 relative z-10">
-                        <CardTitle className="flex items-center gap-3 text-lg font-bold">
-                          <div className="bg-linear-to-br from-amber-500 to-orange-600 p-2.5 rounded-xl">
-                            <Bell className="h-5 w-5 text-white" />
-                          </div>
-                          Notifications
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="relative z-10">
-                        <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                          Real-time alerts for vehicle alerts, maintenance, and
-                          assignments
-                        </p>
-                        <div className="flex items-center text-amber-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
-                          View Alerts <ChevronRight className="h-4 w-4" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                </Link>
-
-                {/* Card 5: Vehicles */}
-                <Link
-                  to="/dashboard/vehicles"
-                  className="no-underline min-w-max"
-                >
-                  <motion.div
-                    whileHover={{ scale: 1.03, y: -5 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <Card className="w-80 h-full border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl overflow-hidden group cursor-pointer">
-                      <div className="absolute inset-0 bg-linear-to-br from-purple-500/10 to-pink-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <CardHeader className="pb-3 relative z-10">
-                        <CardTitle className="flex items-center gap-3 text-lg font-bold">
-                          <div className="bg-linear-to-br from-purple-500 to-pink-600 p-2.5 rounded-xl">
-                            <Truck className="h-5 w-5 text-white" />
-                          </div>
-                          Vehicles
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="relative z-10">
-                        <p className="text-sm text-gray-600 mb-4 leading-relaxed">
-                          Manage fleet vehicles with location tracking and
-                          details
-                        </p>
-                        <div className="flex items-center text-purple-600 text-sm font-semibold group-hover:gap-3 gap-2 transition-all">
-                          View Fleet <ChevronRight className="h-4 w-4" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                </Link>
-              </div>
-            </div>
-
-            {/* Mobile Grid Layout - Visible only on Mobile */}
-            <div className="md:hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Card 1: Live Tracking */}
-              <Link
-                to="/dashboard/tracking"
-                className="no-underline"
-              >
-                <motion.div
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <Card className="border border-white/20 bg-white/80 backdrop-blur-xl rounded-xl shadow-lg overflow-hidden group cursor-pointer h-full">
-                    <CardHeader className="pb-2 relative z-10">
-                      <CardTitle className="flex items-center gap-2 text-base font-bold">
-                        <div className="bg-linear-to-br from-blue-500 to-indigo-600 p-2 rounded-lg">
-                          <MapPin className="h-4 w-4 text-white" />
-                        </div>
-                        Live Tracking
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="relative z-10">
-                      <p className="text-xs text-gray-600 mb-3 leading-relaxed">
-                        Real-time tracking
-                      </p>
-                      <div className="flex items-center text-blue-600 text-xs font-semibold">
-                        View <ChevronRight className="h-3 w-3 ml-1" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </Link>
-
-              {/* Card 2: Messages */}
-              <Link
-                to="/dashboard/messages"
-                className="no-underline"
-              >
-                <motion.div
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <Card className="border border-white/20 bg-white/80 backdrop-blur-xl rounded-xl shadow-lg overflow-hidden group cursor-pointer h-full">
-                    <CardHeader className="pb-2 relative z-10">
-                      <CardTitle className="flex items-center gap-2 text-base font-bold">
-                        <div className="bg-linear-to-br from-emerald-500 to-teal-600 p-2 rounded-lg">
-                          <MessageSquare className="h-4 w-4 text-white" />
-                        </div>
-                        Messages
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="relative z-10">
-                      <p className="text-xs text-gray-600 mb-3 leading-relaxed">
-                        Real-time chat
-                      </p>
-                      <div className="flex items-center text-emerald-600 text-xs font-semibold">
-                        Open <ChevronRight className="h-3 w-3 ml-1" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </Link>
-
-              {/* Card 3: Maintenance */}
-              <Link
-                to="/dashboard/maintenance"
-                className="no-underline"
-              >
-                <motion.div
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <Card className="border border-white/20 bg-white/80 backdrop-blur-xl rounded-xl shadow-lg overflow-hidden group cursor-pointer h-full">
-                    <CardHeader className="pb-2 relative z-10">
-                      <CardTitle className="flex items-center gap-2 text-base font-bold">
-                        <div className="bg-linear-to-br from-orange-500 to-red-600 p-2 rounded-lg">
-                          <Wrench className="h-4 w-4 text-white" />
-                        </div>
-                        Maintenance
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="relative z-10">
-                      <p className="text-xs text-gray-600 mb-3 leading-relaxed">
-                        Track repairs
-                      </p>
-                      <div className="flex items-center text-orange-600 text-xs font-semibold">
-                        Manage <ChevronRight className="h-3 w-3 ml-1" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </Link>
-
-              {/* Card 4: Notifications */}
-              <Link
-                to="/dashboard/notifications"
-                className="no-underline"
-              >
-                <motion.div
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <Card className="border border-white/20 bg-white/80 backdrop-blur-xl rounded-xl shadow-lg overflow-hidden group cursor-pointer h-full">
-                    <CardHeader className="pb-2 relative z-10">
-                      <CardTitle className="flex items-center gap-2 text-base font-bold">
-                        <div className="bg-linear-to-br from-amber-500 to-orange-600 p-2 rounded-lg">
-                          <Bell className="h-4 w-4 text-white" />
-                        </div>
-                        Notifications
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="relative z-10">
-                      <p className="text-xs text-gray-600 mb-3 leading-relaxed">
-                        Real-time alerts
-                      </p>
-                      <div className="flex items-center text-amber-600 text-xs font-semibold">
-                        View <ChevronRight className="h-3 w-3 ml-1" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </Link>
-
-              {/* Card 5: Vehicles */}
-              <Link
-                to="/dashboard/vehicles"
-                className="no-underline"
-              >
-                <motion.div
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <Card className="border border-white/20 bg-white/80 backdrop-blur-xl rounded-xl shadow-lg overflow-hidden group cursor-pointer h-full">
-                    <CardHeader className="pb-2 relative z-10">
-                      <CardTitle className="flex items-center gap-2 text-base font-bold">
-                        <div className="bg-linear-to-br from-purple-500 to-pink-600 p-2 rounded-lg">
-                          <Truck className="h-4 w-4 text-white" />
-                        </div>
-                        Vehicles
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="relative z-10">
-                      <p className="text-xs text-gray-600 mb-3 leading-relaxed">
-                        Manage fleet
-                      </p>
-                      <div className="flex items-center text-purple-600 text-xs font-semibold">
-                        View <ChevronRight className="h-3 w-3 ml-1" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              </Link>
-            </div>
-          </motion.div>
-
-          {/* Charts Row */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.6 }}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-6"
-          >
-            <Card className="overflow-hidden border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl">
-              <CardHeader className="pb-4 bg-linear-to-r from-blue-50 to-indigo-50">
-                <div className="flex justify-between items-start gap-2">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-linear-to-br from-blue-600 to-indigo-600 p-2 rounded-lg">
-                      <TrendingUp className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-xl font-bold text-gray-900">
-                        Fuel Cost Trend
-                      </CardTitle>
-                      {fuelLogs && fuelLogs.length === 0 && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Sample data shown
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="h-[250px] sm:h-[300px]">
-                {fuelLogsLoading ? (
-                  <div className="flex h-full items-center justify-center">
-                    <div className="text-center">
-                      <div className="animate-pulse bg-gray-200 rounded-full h-8 w-24 mb-4"></div>
-                      <div className="animate-pulse bg-gray-200 rounded h-2 w-48"></div>
-                    </div>
-                  </div>
-                ) : fuelData.length === 0 ? (
-                  <div className="flex h-full flex-col items-center justify-center text-gray-500">
-                    <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center mb-3">
-                      <Fuel className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <p className="text-sm font-medium">
-                      No fuel data this week
-                    </p>
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={fuelData}
-                      margin={{ top: 10, right: 10, left: 0, bottom: 10 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis
-                        dataKey="date"
-                        tick={{ fontSize: 11 }}
-                        tickLine={false}
-                        axisLine={false}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 11 }}
-                        tickLine={false}
-                        axisLine={false}
-                        width={50}
-                      />
-                      <Tooltip
-                        content={({ payload, label }) => (
-                          <div className="bg-white p-3 rounded-lg shadow-md border border-gray-200">
-                            <p className="text-sm font-medium mb-1">{label}</p>
-                            <p className="text-sm text-blue-600 font-semibold">
-                              ${payload?.[0]?.value?.toFixed(2) || "0"}
-                            </p>
-                          </div>
-                        )}
-                      />
-                      <Bar
-                        dataKey="cost"
-                        fill="#1d4ed8"
-                        radius={[4, 4, 0, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="overflow-hidden border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl">
-              <CardHeader className="pb-4 bg-linear-to-r from-blue-50 to-indigo-50">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-linear-to-br from-blue-600 to-indigo-600 p-2 rounded-lg">
-                      <Truck className="h-5 w-5 text-white" />
-                    </div>
-                    <CardTitle className="text-xl font-bold text-gray-900">
-                      Vehicle Status
-                    </CardTitle>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="h-[250px] sm:h-[300px] flex items-center justify-center">
-                {vehiclesLoading ? (
-                  <div className="flex h-full items-center justify-center">
-                    <div className="text-center">
-                      <div className="animate-pulse bg-gray-200 rounded-full h-8 w-24 mb-4"></div>
-                      <div className="animate-pulse bg-gray-200 rounded h-2 w-48"></div>
-                    </div>
-                  </div>
-                ) : vehicleStatusData.length === 0 ? (
-                  <div className="flex h-full flex-col items-center justify-center text-gray-500">
-                    <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center mb-3">
-                      <Truck className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <p className="text-sm font-medium">No vehicles added</p>
-                  </div>
-                ) : (
-                  <PieChart width={220} height={220} className="mx-auto">
-                    <Pie
-                      data={vehicleStatusData}
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={70}
-                      innerRadius={45}
-                      dataKey="value"
-                      cornerRadius={8}
-                    >
-                      {vehicleStatusData.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={
-                            entry.name === "Active"
-                              ? "#10b981"
-                              : entry.name === "Maintenance"
-                              ? "#f59e0b"
-                              : "#2563eb"
-                          }
-                          stroke="white"
-                          strokeWidth={2}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      content={({ payload }) => (
-                        <div className="bg-white p-3 rounded-lg shadow-md border border-gray-200">
-                          <p className="text-sm font-medium">
-                            {payload?.[0]?.name}
-                          </p>
-                          <p className="text-sm text-blue-600 font-semibold">
-                            {payload?.[0]?.value} vehicles
-                          </p>
-                        </div>
-                      )}
-                    />
-                    <Legend
-                      formatter={(value) => (
-                        <span className="text-xs sm:text-sm text-gray-700">{value}</span>
-                      )}
-                      verticalAlign="bottom"
-                      height={30}
-                    />
-                  </PieChart>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Bottom Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6, duration: 0.6 }}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-6"
-          >
-            <Card className="overflow-hidden border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl">
-              <CardHeader className="pb-4 bg-linear-to-r from-blue-50 to-indigo-50">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-linear-to-br from-blue-600 to-indigo-600 p-2 rounded-lg">
-                      <Wrench className="h-5 w-5 text-white" />
-                    </div>
-                    <CardTitle className="text-xl font-bold text-gray-900">
-                      Maintenance This Week
-                    </CardTitle>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {maintenanceLoading ? (
-                  <div className="space-y-4 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-                    {[1, 2, 3].map((i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
-                      >
-                        <div className="space-y-2">
-                          <div className="h-4 bg-gray-200 rounded w-32 animate-pulse"></div>
-                          <div className="h-3 bg-gray-200 rounded w-24 animate-pulse"></div>
-                        </div>
-                        <div className="h-6 bg-gray-200 rounded w-16 animate-pulse"></div>
-                      </div>
-                    ))}
-                  </div>
-                ) : maintenanceRecords && maintenanceRecords.length > 0 ? (
-                  <div className="space-y-4 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-                    {maintenanceRecords.map((record) => (
-                      <div
-                        key={record._id}
-                        className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <div className="flex items-center">
-                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center mr-3">
-                            <Wrench className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <h4 className="font-medium hover:text-blue-600 transition-colors">
-                              {record.description}
-                            </h4>
-                            <p className="text-sm text-gray-500">
-                              {record.vehicle?.plateNumber} • Due:{" "}
-                              {record.dueDate
-                                ? new Date(record.dueDate).toLocaleDateString(
-                                    "en-US",
-                                    { month: "short", day: "numeric" }
-                                  )
-                                : "N/A"}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium text-gray-900">
-                            ${record.cost.toFixed(2)}
-                          </p>
-                          <span
-                            className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                              record.status === "completed"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-blue-100 text-blue-800"
-                            }`}
-                          >
-                            {record.status.charAt(0).toUpperCase() +
-                              record.status.slice(1)}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex h-48 flex-col items-center justify-center text-gray-500">
-                    <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center mb-3">
-                      <Wrench className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <p className="text-sm font-medium">
-                      No maintenance this week
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="overflow-hidden border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl">
-              <CardHeader className="pb-4 bg-linear-to-r from-blue-50 to-indigo-50">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-linear-to-br from-blue-600 to-indigo-600 p-2 rounded-lg">
-                      <Bell className="h-5 w-5 text-white" />
-                    </div>
-                    <CardTitle className="text-xl font-bold text-gray-900">
-                      Recent Alerts
-                    </CardTitle>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-start space-x-4 p-3 bg-red-50 rounded-lg border border-red-100 hover:bg-red-100 transition-colors">
-                    <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
-                    <div>
-                      <h4 className="font-medium text-red-700">
-                        Maintenance Due
-                      </h4>
-                      <p className="text-sm text-gray-600">
-                        Vehicle ABC-123 requires oil change. Due date passed 2
-                        days ago.
-                      </p>
-                      <p className="text-xs text-red-500 mt-1">
-                        Due:{" "}
-                        {new Date(
-                          new Date().getTime() - 2 * 24 * 60 * 60 * 1000
-                        ).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start space-x-4 p-3 bg-yellow-50 rounded-lg border border-yellow-100 hover:bg-yellow-100 transition-colors">
-                    <AlertTriangle className="h-5 w-5 text-yellow-500 mt-0.5 shrink-0" />
-                    <div>
-                      <h4 className="font-medium text-yellow-700">Low Fuel</h4>
-                      <p className="text-sm text-gray-600">
-                        Vehicle XYZ-789 has low fuel level after long trip.
-                      </p>
-                      <p className="text-xs text-yellow-500 mt-1">
-                        Last refuel:{" "}
-                        {new Date(
-                          new Date().getTime() - 5 * 24 * 60 * 60 * 1000
-                        ).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start space-x-4 p-3 bg-blue-50 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors">
-                    <CheckCircle className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
-                    <div>
-                      <h4 className="font-medium text-blue-700">
-                        Route Completed
-                      </h4>
-                      <p className="text-sm text-gray-600">
-                        Driver John Smith completed delivery route with 100%
-                        efficiency.
-                      </p>
-                      <p className="text-xs text-blue-500 mt-1">
-                        Completed:{" "}
-                        {new Date().toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+            )}
+          </div>
         </div>
       </div>
-    );
-  } catch (error) {
-    console.error("Dashboard render error:", error);
-    return (
-      <div className="min-h-screen bg-linear-to-br from-slate-50 via-blue-50 to-indigo-50 p-4 sm:p-6 lg:p-8 flex items-center justify-center">
-        <Card className="bg-red-50 border-2 border-red-300 max-w-md">
-          <CardHeader>
-            <CardTitle className="text-red-800">Dashboard Error</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-red-700 mb-4">
-              An error occurred while loading the dashboard.
-            </p>
-            <details className="text-sm text-red-600 font-mono bg-red-100 p-3 rounded overflow-auto max-h-40">
-              <summary>Error details</summary>
-              <pre>{error?.toString()}</pre>
-            </details>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-            >
-              Reload Page
-            </button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-}
 
-function KpiCard({
-  title,
-  value,
-  icon: Icon,
-  trend = { value: 0, isPositive: true },
-  loading,
-  warning,
-  color,
-}) {
-  const colorMap = {
-    blue: "bg-linear-to-br from-blue-500 to-indigo-600",
-    green: "bg-linear-to-br from-emerald-500 to-teal-600",
-    indigo: "bg-linear-to-br from-indigo-500 to-purple-600",
-    amber: "bg-linear-to-br from-amber-500 to-orange-600",
-    red: "bg-linear-to-br from-red-500 to-rose-600",
-    purple: "bg-linear-to-br from-purple-500 to-pink-600",
-  };
-
-  try {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        whileHover={{ scale: 1.03, y: -5 }}
-        transition={{ duration: 0.3 }}
-        className="relative"
-      >
-        <Card
-          className={`overflow-hidden border border-white/20 bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl relative min-h-[170px] ${
-            warning ? "ring-2 ring-red-400/50 ring-offset-2" : ""
-          }`}
-        >
-          {/* Decorative circle */}
-          <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
-
-          {/* Icon positioned absolutely to avoid overlap */}
-          <motion.div
-            whileHover={{ rotate: 360 }}
-            transition={{ duration: 0.5 }}
-            className={`absolute top-4 right-4 h-10 w-10 rounded-xl flex items-center justify-center ${colorMap[color]} shadow-lg z-10 cursor-pointer`}
-          >
-            <Icon className="h-5 w-5 text-white" />
-          </motion.div>
-
-          <CardHeader className="pb-2 relative z-10 pr-16">
-            <CardTitle className="text-xs font-bold text-gray-500 uppercase tracking-wider leading-tight">
-              {title}
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent className="relative z-10 pt-1 space-y-2">
-            {loading ? (
-              <div className="space-y-2">
-                <div className="h-8 w-24 bg-linear-to-r from-gray-200 to-gray-300 rounded-lg animate-pulse"></div>
-                <div className="h-4 w-20 bg-linear-to-r from-gray-200 to-gray-300 rounded animate-pulse"></div>
-              </div>
-            ) : (
-              <>
-                <div className="text-3xl font-black text-gray-900 leading-none">
-                  {warning ? (
-                    <span className="text-red-600 flex items-center gap-2">
-                      {value}{" "}
-                      <AlertTriangle className="h-4 w-4 animate-pulse shrink-0" />
-                    </span>
-                  ) : (
-                    value
-                  )}
-                </div>
-                <div className="flex items-center gap-1 pt-1">
-                  <div
-                    className={`flex items-center text-xs font-bold ${
-                      trend.isPositive ? "text-emerald-600" : "text-red-600"
-                    }`}
-                  >
-                    {trend.isPositive ? (
-                      <ArrowUpRight className="h-3.5 w-3.5 mr-0.5" />
-                    ) : (
-                      <ArrowDownRight className="h-3.5 w-3.5 mr-0.5" />
-                    )}
-                    {Math.abs(trend.value).toFixed(1)}%
-                  </div>
-                  <span className="text-xs text-gray-500 font-medium">
-                    vs last week
-                  </span>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+      {/* KPI Cards */}
+      <motion.div variants={fade} initial="hidden" animate="show" className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+        <KpiCard title="Total Vehicles"      value={totalVehicles}      Icon={Truck}    trend={trend(totalVehicles,     totalVehicles - 1)}     loading={vehiclesLoading}     />
+        <KpiCard title="Available Drivers"   value={availableDrivers}   Icon={User}     trend={trend(availableDrivers,  availableDrivers + 1)}  loading={driversLoading}      />
+        <KpiCard title="Active Assignments"  value={activeAssignments}  Icon={MapPin}   trend={trend(activeAssignments, activeAssignments - 1)} loading={assignmentsLoading}  />
+        <KpiCard title="In Maintenance"      value={inMaintenance}      Icon={Wrench}   trend={trend(inMaintenance,     inMaintenance - 1)}     loading={vehiclesLoading}     warning={inMaintenance > 0} />
+        <KpiCard title="Fuel This Week"      value={`$${totalFuelCost.toFixed(0)}`} Icon={Fuel} trend={trend(totalFuelCost, 2050)} loading={fuelLogsLoading} />
+        <KpiCard title="Upcoming Maint."     value={upcomingCount}      Icon={Clock}    trend={trend(upcomingCount, 1)}                         loading={false}               warning={upcomingCount > 0} />
       </motion.div>
-    );
-  } catch (error) {
-    console.error("Error rendering KPI card:", error);
-    return (
-      <Card className="bg-red-50 border border-red-200 rounded-2xl shadow-xl relative min-h-[170px]">
-        <CardContent className="pt-8">
-          <div className="text-center">
-            <p className="text-sm text-red-600 font-semibold">
-              Error loading {title}
-            </p>
+
+      {/* Feature Quick Access */}
+      <div>
+        <h2 className="text-base font-bold text-gray-700 mb-3">Quick Access</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          {FEATURES.map(f => <FeatureCard key={f.to} {...f} />)}
+        </div>
+      </div>
+
+      {/* Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Fuel Cost Chart */}
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingUp className="h-4 w-4 text-blue-600" />
+            <h3 className="font-bold text-gray-900 text-sm">Fuel Cost Trend</h3>
+            {!fuelLogs.length && <span className="text-xs text-gray-400">(sample data)</span>}
           </div>
-        </CardContent>
-      </Card>
-    );
-  }
+          {fuelLogsLoading ? (
+            <div className="h-48 bg-gray-100 rounded animate-pulse" />
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={fuelData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={45} />
+                <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }}
+                  formatter={(v) => [`$${v.toFixed(2)}`, "Cost"]} />
+                <Bar dataKey="cost" fill="#2563eb" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Vehicle Status Pie */}
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col">
+          <div className="flex items-center gap-2 mb-4">
+            <Truck className="h-4 w-4 text-blue-600" />
+            <h3 className="font-bold text-gray-900 text-sm">Vehicle Status</h3>
+          </div>
+          {vehiclesLoading ? (
+            <div className="h-48 bg-gray-100 rounded animate-pulse" />
+          ) : vehicleStatusData.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-400 gap-2">
+              <Truck className="h-8 w-8" />
+              <p className="text-sm">No vehicles added</p>
+            </div>
+          ) : (
+            <div className="flex justify-center">
+              <PieChart width={240} height={220}>
+                <Pie data={vehicleStatusData} cx="50%" cy="50%" outerRadius={75} innerRadius={45} dataKey="value" cornerRadius={6}>
+                  {vehicleStatusData.map((e, i) => (
+                    <Cell key={i} fill={PIE_COLOR[e.name] || PIE_COLOR.default} stroke="white" strokeWidth={2} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }}
+                  formatter={(v) => [`${v} vehicles`]} />
+                <Legend formatter={(v) => <span className="text-xs text-gray-700">{v}</span>} verticalAlign="bottom" height={28} />
+              </PieChart>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom: Maintenance list + Recent Alerts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Maintenance This Week */}
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+            <Wrench className="h-4 w-4 text-blue-600" />
+            <h3 className="font-bold text-gray-900 text-sm">Maintenance This Week</h3>
+          </div>
+          <div className="divide-y divide-gray-50 max-h-72 overflow-y-auto">
+            {maintenanceLoading ? (
+              [1, 2, 3].map(i => <div key={i} className="p-3 flex gap-3 items-center"><div className="h-9 w-9 rounded-full bg-gray-200 animate-pulse" /><div className="flex-1 space-y-1"><div className="h-3 w-32 bg-gray-200 rounded animate-pulse" /><div className="h-2 w-24 bg-gray-200 rounded animate-pulse" /></div></div>)
+            ) : maintenanceRecords.length ? (
+              maintenanceRecords.map(r => (
+                <div key={r._id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                      <Wrench className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{r.description}</p>
+                      <p className="text-xs text-gray-500">{r.vehicle?.plateNumber} • Due: {r.dueDate ? new Date(r.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "N/A"}</p>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-semibold text-gray-900">${r.cost?.toFixed(2)}</p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.status === "completed" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
+                      {r.status?.charAt(0).toUpperCase() + r.status?.slice(1)}
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2">
+                <Wrench className="h-7 w-7" />
+                <p className="text-sm">No maintenance this week</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Recent Alerts - static placeholder (real data goes through NotificationsPage) */}
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+            <Bell className="h-4 w-4 text-blue-600" />
+            <h3 className="font-bold text-gray-900 text-sm">Recent Alerts</h3>
+          </div>
+          <div className="p-4 space-y-3">
+            {[
+              { type: "error",   Icon: AlertTriangle, color: "text-red-500",    bg: "bg-red-50 border-red-100",    title: "Maintenance Due",    body: "Vehicle ABC-123 requires oil change. Due date passed 2 days ago." },
+              { type: "warn",    Icon: AlertTriangle, color: "text-amber-500",  bg: "bg-amber-50 border-amber-100", title: "Low Fuel",           body: "Vehicle XYZ-789 has low fuel after recent long trip." },
+              { type: "success", Icon: CheckCircle,   color: "text-blue-500",   bg: "bg-blue-50 border-blue-100",  title: "Route Completed",    body: "Driver John Smith completed delivery route with 100% efficiency." },
+            ].map(({ Icon, color, bg, title, body }) => (
+              <div key={title} className={`flex items-start gap-3 p-3 rounded-lg border ${bg} hover:brightness-95 transition-all`}>
+                <Icon className={`h-4 w-4 ${color} shrink-0 mt-0.5`} />
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{title}</p>
+                  <p className="text-xs text-gray-600 mt-0.5">{body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
+

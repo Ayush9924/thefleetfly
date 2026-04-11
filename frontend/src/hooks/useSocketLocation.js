@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useRealtime } from '../contexts/RealtimeContext'
+import { useRealtime } from '@/contexts/RealtimeContext'
 
 export const useSocketLocation = () => {
   const { socket, locations } = useRealtime()

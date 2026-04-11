@@ -1,71 +1,61 @@
+import api from '@/services/api';
+
 /**
- * Get vehicle location data from live tracking
+ * Push a fresh GPS position to the server (REST fallback).
+ * The primary real-time pathway is Socket.io (driver:location_update).
+
+ * @param {number} lat
+ * @param {number} lng
+ * @param {number|null} accuracy
  */
-export const getVehicleLocation = async (vehicleId) => {
-  try {
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
-    const response = await fetch(`${baseUrl}/location/vehicle/${vehicleId}/latest`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    if (!response.ok) return null;
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching vehicle location:', error);
-    return null;
-  }
+export const updateLocation = async (lat, lng, accuracy = null) => {
+  const { data } = await api.post('/location/update', { lat, lng, accuracy });
+  return data;
 };
 
 /**
- * Get all vehicles locations
+ * Fetch the latest known location for a single driver.
+ * @param {string} driverId
  */
-export const getAllVehiclesLocations = async () => {
-  try {
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
-    const response = await fetch(`${baseUrl}/location/vehicles/latest`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    if (!response.ok) return [];
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching vehicles locations:', error);
-    return [];
-  }
+export const getLocation = async (driverId) => {
+  const { data } = await api.get(`/location/${driverId}`);
+  return data.data;
 };
 
 /**
- * Calculate distance between two coordinates (in km)
+ * Fetch all drivers that sent a location update in the last 30 seconds.
  */
+export const getAllLocations = async () => {
+  const { data } = await api.get('/location/all');
+  return data.data;
+};
+
+// ── Backward-compat aliases (used by MaintenancePage / PublicLiveTracking) ───
+export const getAllVehiclesLocations = getAllLocations;
+export const getVehicleLocation = (vehicleId) => getLocation(vehicleId);
+
+/** Calculate distance between two coordinates in km */
 export const calculateDistance = (lat1, lon1, lat2, lon2) => {
-  const R = 6371; // Earth's radius in km
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a = 
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return (R * c).toFixed(2);
+  const R = 6371;
+  const toRad = (v) => (v * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(2);
 };
 
-/**
- * Format time difference (minutes ago, hours ago, etc.)
- */
+/** Format time difference for display */
 export const formatTimeAgo = (timestamp) => {
   if (!timestamp) return 'Unknown';
-  
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diffMs = now - date;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 1) return 'Just now';
+  const diffMs   = Date.now() - new Date(timestamp).getTime();
+  const diffMins = Math.floor(diffMs / 60_000);
+  const diffHrs  = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHrs / 24);
+  if (diffMins < 1)  return 'Just now';
   if (diffMins < 60) return `${diffMins} min ago`;
-  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffHrs < 24)  return `${diffHrs} hour${diffHrs > 1 ? 's' : ''} ago`;
   return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
 };
+

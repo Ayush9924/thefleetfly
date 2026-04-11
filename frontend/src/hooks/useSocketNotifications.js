@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react'
-import { useRealtime } from '../contexts/RealtimeContext'
+import { useRealtime } from '@/contexts/RealtimeContext'
 
 /**
  * Custom hook for managing notifications via Socket.io

@@ -17,7 +17,7 @@ class LocationService {
       typeof longitude !== 'number' ||
       Math.abs(latitude) > 90 ||
       Math.abs(longitude) > 180 ||
-      (accuracy && accuracy > parseInt(process.env.GPS_ACCURACY_THRESHOLD || '50'))
+      (accuracy && accuracy > parseInt(process.env.GPS_ACCURACY_THRESHOLD || '500'))
     ) {
       return null; // Invalid data
     }
@@ -62,6 +62,11 @@ class LocationService {
   isTracking(driverId) {
     return this.locations.has(driverId);
   }
+
+  removeLocation(driverId) {
+    this.locations.delete(driverId);
+  }
 }
+
 
 module.exports = new LocationService();

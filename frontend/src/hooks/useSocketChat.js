@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState } from 'react'
-import { useRealtime } from '../contexts/RealtimeContext'
+import { useRealtime } from '@/contexts/RealtimeContext'
 
 /**
  * Custom hook for managing real-time chat via Socket.io
