@@ -28,7 +28,7 @@ const socketCorsConfig = {
         'https://thefleetfly.xyz',
         'https://www.thefleetfly.xyz',
         'https://thefleetfly-frontend.vercel.app',
-        'https://thefleetfly-backend.onrender.com',
+        'https://thefleetfly.onrender.com',
         'http://localhost:5173',
         'http://localhost:5174',
         'http://localhost:3000'
@@ -104,7 +104,7 @@ app.use(cors({
         process.env.FRONTEND_URL || 'https://thefleetfly-frontend.vercel.app',
         'https://thefleetfly.xyz',
         'https://www.thefleetfly.xyz',
-        'https://thefleetfly-backend.onrender.com',
+        'https://thefleetfly.onrender.com',
         'http://localhost:5173',
         'http://localhost:5174',
         'http://localhost:3000'

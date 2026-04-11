@@ -1,4 +1,33 @@
 const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
+
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
+
+const hasResend = () => {
+  const key = process.env.RESEND_API_KEY || '';
+  return Boolean(key) && !key.includes('placeholder') && !key.startsWith('re_dev_');
+};
+
+const sendWithResend = async ({ to, subject, html }) => {
+  if (!resend || !hasResend()) return false;
+
+  const from = process.env.RESEND_FROM_EMAIL || 'FleetFly <onboarding@resend.dev>';
+  const response = await resend.emails.send({
+    from,
+    to,
+    subject,
+    html,
+  });
+
+  if (response?.error) {
+    throw new Error(response.error.message || 'Resend API error');
+  }
+
+  console.log('✅ Email sent via Resend:', response?.id || response?.data?.id || 'ok');
+  return true;
+};
 
 // ─── Transporter ────────────────────────────────────────────────────────────
 // Lazily created so env vars are guaranteed to be loaded first.
@@ -6,13 +35,19 @@ let transporter = null;
 
 const getTransporter = () => {
   if (!transporter) {
+    const rawPass = process.env.SMTP_PASS || '';
+    const normalizedPass = rawPass.replace(/\s+/g, '');
+
     transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: parseInt(process.env.SMTP_PORT) || 587,
       secure: false, // TLS via STARTTLS (port 587)
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
       auth: {
         user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,  // Gmail App Password (16-char string from .env)
+        pass: normalizedPass,  // Gmail App Password (16-char string; spaces removed)
       },
     });
   }
@@ -22,10 +57,11 @@ const getTransporter = () => {
 // ─── Send OTP Email ──────────────────────────────────────────────────────────
 const sendOTPEmail = async (email, otp, name) => {
   try {
+    const subject = 'Password Reset OTP - FleetFly';
     const mailOptions = {
       from: `"FleetFly" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: 'Password Reset OTP - FleetFly',
+      subject,
       html: `
         <!DOCTYPE html>
         <html>
@@ -77,11 +113,21 @@ const sendOTPEmail = async (email, otp, name) => {
       `,
     };
 
+    try {
+      if (await sendWithResend({ to: email, subject, html: mailOptions.html })) {
+        return true;
+      }
+    } catch (resendError) {
+      console.error('⚠️ Resend send failed, falling back to SMTP:', resendError.message);
+    }
+
     const info = await getTransporter().sendMail(mailOptions);
     console.log('✅ OTP email sent via Nodemailer:', info.messageId);
     return true;
   } catch (error) {
     console.error('❌ Error sending OTP email:', error.message);
+    if (error.code) console.error('   code:', error.code);
+    if (error.response) console.error('   response:', error.response);
     return false;
   }
 };
@@ -89,10 +135,11 @@ const sendOTPEmail = async (email, otp, name) => {
 // ─── Send Password Changed Confirmation Email ────────────────────────────────
 const sendPasswordChangedEmail = async (email, name) => {
   try {
+    const subject = 'Password Changed Successfully - FleetFly';
     const mailOptions = {
       from: `"FleetFly" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: 'Password Changed Successfully - FleetFly',
+      subject,
       html: `
         <!DOCTYPE html>
         <html>
@@ -137,6 +184,14 @@ const sendPasswordChangedEmail = async (email, name) => {
         </html>
       `,
     };
+
+    try {
+      if (await sendWithResend({ to: email, subject, html: mailOptions.html })) {
+        return true;
+      }
+    } catch (resendError) {
+      console.error('⚠️ Resend send failed, falling back to SMTP:', resendError.message);
+    }
 
     const info = await getTransporter().sendMail(mailOptions);
     console.log('✅ Password changed email sent via Nodemailer:', info.messageId);
