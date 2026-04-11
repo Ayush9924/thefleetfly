@@ -1,28 +1,71 @@
 const nodemailer = require('nodemailer');
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false,
-  connectionTimeout: 10_000,
-  greetingTimeout: 10_000,
-  socketTimeout: 15_000,
+const SMTP_CANDIDATES = [
+  { host: 'smtp-relay.brevo.com', port: 587, secure: false },
+  { host: 'smtp-relay.brevo.com', port: 2525, secure: false },
+  { host: 'smtp-relay.sendinblue.com', port: 587, secure: false },
+  { host: 'smtp-relay.sendinblue.com', port: 2525, secure: false },
+  { host: 'smtp-relay.brevo.com', port: 465, secure: true },
+  { host: 'smtp-relay.sendinblue.com', port: 465, secure: true },
+];
+
+let activeSmtpConfig = null;
+
+const createTransport = (config) => nodemailer.createTransport({
+  host: config.host,
+  port: config.port,
+  secure: config.secure,
+  connectionTimeout: 8_000,
+  greetingTimeout: 8_000,
+  socketTimeout: 12_000,
   auth: {
     user: process.env.BREVO_SMTP_USER,
     pass: process.env.BREVO_SMTP_KEY,
   },
 });
 
-transporter.verify((error) => {
-  if (error) {
-    console.error('[MAILER] Brevo SMTP connection failed:', error.message);
-  } else {
-    console.log('[MAILER] Brevo SMTP ready ✓');
+const getSmtpOrder = () => {
+  if (!activeSmtpConfig) return SMTP_CANDIDATES;
+  return [activeSmtpConfig, ...SMTP_CANDIDATES.filter(
+    (c) => !(c.host === activeSmtpConfig.host && c.port === activeSmtpConfig.port && c.secure === activeSmtpConfig.secure)
+  )];
+};
+
+const sendWithSmtpFallback = async (mailOptions) => {
+  const attempts = getSmtpOrder();
+  let lastError = null;
+
+  for (const cfg of attempts) {
+    const transporter = createTransport(cfg);
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      activeSmtpConfig = cfg;
+      console.log(`[MAILER] Brevo SMTP ready ✓ (${cfg.host}:${cfg.port}, secure=${cfg.secure})`);
+      return info;
+    } catch (error) {
+      lastError = error;
+      console.error(`[MAILER] SMTP attempt failed (${cfg.host}:${cfg.port}, secure=${cfg.secure}):`, error.message);
+    }
   }
-});
+
+  throw lastError || new Error('All SMTP attempts failed');
+};
+
+// Probe the currently preferred route at startup (non-blocking).
+(async () => {
+  try {
+    const first = getSmtpOrder()[0];
+    const transporter = createTransport(first);
+    await transporter.verify();
+    activeSmtpConfig = first;
+    console.log(`[MAILER] Brevo SMTP ready ✓ (${first.host}:${first.port}, secure=${first.secure})`);
+  } catch (error) {
+    console.error('[MAILER] Brevo SMTP connection failed:', error.message);
+  }
+})();
 
 const sendEmail = async ({ to, subject, text, html }) => {
-  const sendMailPromise = transporter.sendMail({
+  const sendMailPromise = sendWithSmtpFallback({
     from: `"FleetFly" <${process.env.BREVO_FROM}>`,
     to,
     subject,
@@ -41,7 +84,7 @@ const sendEmail = async ({ to, subject, text, html }) => {
 };
 
 const sendOTPEmail = async (toEmail, otp) => {
-  const sendMailPromise = transporter.sendMail({
+  const sendMailPromise = sendWithSmtpFallback({
     from: `"FleetFly" <${process.env.BREVO_FROM}>`,
     to: toEmail,
     subject: 'Your FleetFly OTP Code',
@@ -69,7 +112,7 @@ const sendOTPEmail = async (toEmail, otp) => {
 };
 
 const sendPasswordChangedEmail = async (toEmail) => {
-  const sendMailPromise = transporter.sendMail({
+  const sendMailPromise = sendWithSmtpFallback({
     from: `"FleetFly" <${process.env.BREVO_FROM}>`,
     to: toEmail,
     subject: 'FleetFly — Password Changed Successfully',
