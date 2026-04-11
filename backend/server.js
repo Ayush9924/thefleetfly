@@ -10,14 +10,26 @@ const morgan = require('morgan');
 const fs = require('fs');
 const isTestEnv = process.env.NODE_ENV === 'test';
 
-const requiredEnvVars = ['GMAIL_USER', 'GMAIL_APP_PASSWORD', 'JWT_SECRET'];
-requiredEnvVars.forEach((key) => {
-  if (!process.env[key]) {
-    console.error(`[STARTUP] MISSING ENV VAR: ${key}`);
-  } else {
-    console.log(`[STARTUP] ${key} loaded ✓`);
-  }
-});
+const hasMailUser = Boolean(process.env.GMAIL_USER || process.env.SMTP_USER);
+const hasMailPass = Boolean(process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS);
+
+if (!hasMailUser) {
+  console.error('[STARTUP] MISSING ENV VAR: GMAIL_USER (or SMTP_USER)');
+} else {
+  console.log('[STARTUP] Mail user loaded ✓');
+}
+
+if (!hasMailPass) {
+  console.error('[STARTUP] MISSING ENV VAR: GMAIL_APP_PASSWORD (or SMTP_PASS)');
+} else {
+  console.log('[STARTUP] Mail password loaded ✓');
+}
+
+if (!process.env.JWT_SECRET) {
+  console.error('[STARTUP] MISSING ENV VAR: JWT_SECRET');
+} else {
+  console.log('[STARTUP] JWT_SECRET loaded ✓');
+}
 
 // Connect to database
 if (!isTestEnv) {

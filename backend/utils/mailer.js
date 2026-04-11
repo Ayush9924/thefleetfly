@@ -1,12 +1,18 @@
 const nodemailer = require('nodemailer');
 
+const gmailUser = process.env.GMAIL_USER || process.env.SMTP_USER;
+const gmailAppPassword = (process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS || '').replace(/\s+/g, '');
+
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 465,
   secure: true,
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
   auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
+    user: gmailUser,
+    pass: gmailAppPassword,
   },
   tls: {
     rejectUnauthorized: true,
@@ -24,8 +30,12 @@ if (process.env.NODE_ENV !== 'test') {
 }
 
 const sendOTPEmail = async (toEmail, otp) => {
+  if (!gmailUser || !gmailAppPassword) {
+    throw new Error('Missing email credentials: set GMAIL_USER/GMAIL_APP_PASSWORD (or SMTP_USER/SMTP_PASS)');
+  }
+
   const mailOptions = {
-    from: `"FleetFly" <${process.env.GMAIL_USER}>`,
+    from: `"FleetFly" <${gmailUser}>`,
     to: toEmail,
     subject: 'Your FleetFly OTP Code',
     html: `
@@ -52,8 +62,12 @@ const sendOTPEmail = async (toEmail, otp) => {
 };
 
 const sendPasswordChangedEmail = async (toEmail) => {
+  if (!gmailUser || !gmailAppPassword) {
+    throw new Error('Missing email credentials: set GMAIL_USER/GMAIL_APP_PASSWORD (or SMTP_USER/SMTP_PASS)');
+  }
+
   const mailOptions = {
-    from: `"FleetFly" <${process.env.GMAIL_USER}>`,
+    from: `"FleetFly" <${gmailUser}>`,
     to: toEmail,
     subject: 'FleetFly - Password Changed',
     html: `
