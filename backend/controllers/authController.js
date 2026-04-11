@@ -238,6 +238,7 @@ const generateOTP = () => {
 const requestPasswordReset = async (req, res) => {
   try {
     const { email } = req.body;
+    console.log('[AUTH] forgot-password request received for:', email);
 
     if (!email) {
       return res.status(400).json({
@@ -287,7 +288,14 @@ const requestPasswordReset = async (req, res) => {
     }
 
     try {
-      await sendOTPEmail(email, otp);
+      console.log('[AUTH] Sending OTP email via mailer...');
+      const sendPromise = sendOTPEmail(email, otp);
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('sendOTPEmail timeout after 20s')), 20_000);
+      });
+
+      await Promise.race([sendPromise, timeoutPromise]);
+      console.log('[AUTH] OTP email send completed');
       return res.status(200).json({
         success: true,
         message: 'OTP sent to your email',

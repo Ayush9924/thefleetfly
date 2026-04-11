@@ -4,6 +4,9 @@ const transporter = nodemailer.createTransport({
   host: 'smtp-relay.brevo.com',
   port: 587,
   secure: false,
+  connectionTimeout: 10_000,
+  greetingTimeout: 10_000,
+  socketTimeout: 15_000,
   auth: {
     user: process.env.BREVO_SMTP_USER,
     pass: process.env.BREVO_SMTP_KEY,
@@ -19,7 +22,7 @@ transporter.verify((error) => {
 });
 
 const sendEmail = async ({ to, subject, text, html }) => {
-  const info = await transporter.sendMail({
+  const sendMailPromise = transporter.sendMail({
     from: `"FleetFly" <${process.env.BREVO_FROM}>`,
     to,
     subject,
@@ -27,12 +30,18 @@ const sendEmail = async ({ to, subject, text, html }) => {
     html,
   });
 
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('SMTP send timeout after 15s')), 15_000);
+  });
+
+  const info = await Promise.race([sendMailPromise, timeoutPromise]);
+
   console.log('[MAILER] Email sent to:', to, '| ID:', info.messageId);
   return info;
 };
 
 const sendOTPEmail = async (toEmail, otp) => {
-  const info = await transporter.sendMail({
+  const sendMailPromise = transporter.sendMail({
     from: `"FleetFly" <${process.env.BREVO_FROM}>`,
     to: toEmail,
     subject: 'Your FleetFly OTP Code',
@@ -49,12 +58,18 @@ const sendOTPEmail = async (toEmail, otp) => {
       </div>
     `,
   });
+
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('SMTP send timeout after 15s')), 15_000);
+  });
+
+  const info = await Promise.race([sendMailPromise, timeoutPromise]);
   console.log('[MAILER] OTP sent to:', toEmail, '| ID:', info.messageId);
   return info;
 };
 
 const sendPasswordChangedEmail = async (toEmail) => {
-  const info = await transporter.sendMail({
+  const sendMailPromise = transporter.sendMail({
     from: `"FleetFly" <${process.env.BREVO_FROM}>`,
     to: toEmail,
     subject: 'FleetFly — Password Changed Successfully',
@@ -69,6 +84,12 @@ const sendPasswordChangedEmail = async (toEmail) => {
       </div>
     `,
   });
+
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('SMTP send timeout after 15s')), 15_000);
+  });
+
+  const info = await Promise.race([sendMailPromise, timeoutPromise]);
   return info;
 };
 
