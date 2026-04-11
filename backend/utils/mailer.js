@@ -1,24 +1,50 @@
 const axios = require('axios');
 
 const sendEmail = async ({ to, subject, html }) => {
-  const response = await axios.post(
-    'https://api.brevo.com/v3/smtp/email',
-    {
-      sender: { name: 'FleetFly', email: process.env.BREVO_FROM },
-      to: [{ email: to }],
-      subject,
-      htmlContent: html,
-    },
-    {
-      headers: {
-        'api-key': process.env.BREVO_API_KEY,
-        'Content-Type': 'application/json',
+  const apiKey = process.env.BREVO_API_KEY || '';
+  const fromEmail = process.env.BREVO_FROM || '';
+
+  if (!apiKey) {
+    throw new Error('BREVO_API_KEY is missing');
+  }
+
+  if (!apiKey.startsWith('xkeysib-')) {
+    throw new Error('Invalid BREVO_API_KEY format. Use raw xkeysib- key, not encoded/base64 JSON.');
+  }
+
+  if (!fromEmail) {
+    throw new Error('BREVO_FROM is missing');
+  }
+
+  try {
+    const response = await axios.post(
+      'https://api.brevo.com/v3/smtp/email',
+      {
+        sender: { name: 'FleetFly', email: fromEmail },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
       },
-      timeout: 10000,
-    }
-  );
-  console.log('[MAILER] Sent via Brevo API | ID:', response.data.messageId);
-  return response.data;
+      {
+        headers: {
+          'api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      }
+    );
+    console.log('[MAILER] Sent via Brevo API | ID:', response.data.messageId);
+    return response.data;
+  } catch (error) {
+    const status = error.response?.status;
+    const body = error.response?.data;
+    console.error('[MAILER] Brevo API failed:', {
+      status,
+      body,
+      message: error.message,
+    });
+    throw error;
+  }
 };
 
 const sendOTPEmail = async (toEmail, otp) => sendEmail({

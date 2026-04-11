@@ -18,6 +18,10 @@ const isTestEnv = process.env.NODE_ENV === 'test';
   }
 });
 
+if (process.env.BREVO_API_KEY && !process.env.BREVO_API_KEY.startsWith('xkeysib-')) {
+  console.error('[STARTUP] ❌ BREVO_API_KEY format looks invalid. Expected raw key starting with xkeysib-.');
+}
+
 if (!process.env.JWT_SECRET) {
   console.error('[STARTUP] MISSING ENV VAR: JWT_SECRET');
 } else {
