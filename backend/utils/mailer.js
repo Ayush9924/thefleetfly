@@ -4,6 +4,8 @@ const { Resend } = require('resend');
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
+const isProduction = process.env.NODE_ENV === 'production';
+const allowSmtpFallback = process.env.ALLOW_SMTP_FALLBACK === 'true';
 
 const hasResend = () => {
   const key = process.env.RESEND_API_KEY || '';
@@ -121,6 +123,13 @@ const sendOTPEmail = async (email, otp, name) => {
       console.error('⚠️ Resend send failed, falling back to SMTP:', resendError.message);
     }
 
+    // Render free instances block outbound SMTP ports (25/465/587).
+    // In production, only use SMTP if explicitly allowed.
+    if (isProduction && !allowSmtpFallback) {
+      console.error('❌ SMTP fallback disabled in production. Configure RESEND_API_KEY and RESEND_FROM_EMAIL.');
+      return false;
+    }
+
     const info = await getTransporter().sendMail(mailOptions);
     console.log('✅ OTP email sent via Nodemailer:', info.messageId);
     return true;
@@ -191,6 +200,11 @@ const sendPasswordChangedEmail = async (email, name) => {
       }
     } catch (resendError) {
       console.error('⚠️ Resend send failed, falling back to SMTP:', resendError.message);
+    }
+
+    if (isProduction && !allowSmtpFallback) {
+      console.error('❌ SMTP fallback disabled in production. Configure RESEND_API_KEY and RESEND_FROM_EMAIL.');
+      return false;
     }
 
     const info = await getTransporter().sendMail(mailOptions);
