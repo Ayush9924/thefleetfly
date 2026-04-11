@@ -10,6 +10,15 @@ const morgan = require('morgan');
 const fs = require('fs');
 const isTestEnv = process.env.NODE_ENV === 'test';
 
+const requiredEnvVars = ['GMAIL_USER', 'GMAIL_APP_PASSWORD', 'JWT_SECRET'];
+requiredEnvVars.forEach((key) => {
+  if (!process.env[key]) {
+    console.error(`[STARTUP] MISSING ENV VAR: ${key}`);
+  } else {
+    console.log(`[STARTUP] ${key} loaded ✓`);
+  }
+});
+
 // Connect to database
 if (!isTestEnv) {
   connectDB();
