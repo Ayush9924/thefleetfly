@@ -1,8 +1,11 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 const OTP = require('../models/OTP');
 const { sendOTPEmail, sendPasswordChangedEmail } = require('../utils/mailer');
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Development mode: In-memory users storage
 const devUsers = {
@@ -216,6 +219,110 @@ const login = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// @desc    Authenticate user with Google
+// @route   POST /api/auth/google
+const googleLogin = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ message: 'No Google token provided' });
+    }
+
+    let ticket;
+    try {
+      // Verify Google Token
+      ticket = await googleClient.verifyIdToken({
+        idToken: token,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+    } catch (verifyError) {
+      console.error('❌ Google token verification error:', verifyError.message);
+      return res.status(401).json({ message: 'Invalid Google token' });
+    }
+
+    const payload = ticket.getPayload();
+    const { email, name } = payload;
+
+    // Check if MongoDB is available
+    let user = null;
+    let useDevMode = false;
+
+    try {
+      user = await User.findOne({ email });
+    } catch (dbError) {
+      console.log('⚠️  MongoDB unavailable, using development mode for Google login');
+      useDevMode = true;
+    }
+
+    if (useDevMode) {
+      // Find or create in dev mode
+      let devUser = devUsers[email];
+      if (!devUser) {
+        devUser = {
+          _id: Date.now().toString(),
+          name,
+          email,
+          password: Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8), // Dummy password
+          role: 'manager'
+        };
+        devUsers[email] = devUser;
+      }
+
+      const jwtToken = jwt.sign(
+        { id: devUser._id },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRE }
+      );
+
+      console.log('✅ Development mode Google login successful for:', email);
+      return res.json({
+        user: {
+          _id: devUser._id,
+          name: devUser.name,
+          email: devUser.email,
+          role: devUser.role
+        },
+        token: jwtToken
+      });
+    }
+
+    // MongoDB mode
+    if (!user) {
+      // Create user if not exists
+      console.log('📝 Creating new user via Google Login:', email);
+      user = await User.create({
+        name,
+        email,
+        password: Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8), // Generate a random secure password
+        role: 'manager'
+      });
+    }
+
+    const jwtToken = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRE }
+    );
+
+    console.log('✅ MongoDB Google login successful for:', email);
+    res.json({
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      },
+      token: jwtToken
+    });
+    
+  } catch (error) {
+    console.error('❌ Google login error:', error.message);
+    res.status(500).json({ message: 'Error authenticating with Google' });
+  }
+};
+
 
 // @desc    Get current user profile
 // @route   GET /api/auth/me
@@ -504,4 +611,4 @@ const resetPassword = async (req, res) => {
   }
 };
 
-module.exports = { register, login, getMe, requestPasswordReset, verifyOTP, resetPassword };
+module.exports = { register, login, googleLogin, getMe, requestPasswordReset, verifyOTP, resetPassword };

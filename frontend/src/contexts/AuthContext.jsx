@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
-import { login as apiLogin, register as apiRegister, getCurrentUser } from '../services/authService.jsx'
+import { login as apiLogin, loginWithGoogle as apiLoginWithGoogle, register as apiRegister, getCurrentUser } from '../services/authService.jsx'
 import { disconnectSocket } from '../lib/socket.js'
 
 const AuthContext = createContext()
@@ -49,6 +49,21 @@ export function AuthProvider({ children }) {
     }
   }, [navigate])
 
+  const loginWithGoogle = useCallback(async (googleToken) => {
+    try {
+      disconnectSocket() // Disconnect old socket before logging in as new user
+      const { user, token } = await apiLoginWithGoogle(googleToken)
+      setCurrentUser(user)
+      localStorage.setItem('token', token)
+      localStorage.setItem('currentUser', JSON.stringify(user))
+      toast.success('Logged in with Google successfully!')
+      navigate('/dashboard')
+    } catch (error) {
+      toast.error('Failed to login with Google.')
+      throw error
+    }
+  }, [navigate])
+
   const register = useCallback(async (name, email, password, role = 'manager') => {
     try {
       const { user, token } = await apiRegister(name, email, password, role)
@@ -75,6 +90,7 @@ export function AuthProvider({ children }) {
   const value = {
     currentUser,
     login,
+    loginWithGoogle,
     register,
     logout,
     loading
