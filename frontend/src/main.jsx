@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from '@/contexts/AuthContext.jsx'
 import { RealtimeProvider } from '@/contexts/RealtimeContext.jsx'
 import { Toaster } from 'react-hot-toast'
+import { GoogleOAuthProvider } from '@react-oauth/google'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,12 +24,14 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <RealtimeProvider>
-            <App />
-            <Toaster position="top-right" />
-          </RealtimeProvider>
-        </AuthProvider>
+        <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || 'placeholder-client-id'}>
+          <AuthProvider>
+            <RealtimeProvider>
+              <App />
+              <Toaster position="top-right" />
+            </RealtimeProvider>
+          </AuthProvider>
+        </GoogleOAuthProvider>
       </QueryClientProvider>
     </BrowserRouter>
   </React.StrictMode>,

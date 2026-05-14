@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, Mail, Lock, Truck } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { motion } from "framer-motion";
+import { GoogleLogin } from '@react-oauth/google';
 
 const fade = {
   hidden: { opacity: 0, y: 16 },
@@ -30,7 +31,7 @@ export default function LoginPage() {
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [loading,  setLoading]  = useState(false);
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const navigate  = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -82,12 +83,30 @@ export default function LoginPage() {
             >
               {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Signing in…</> : "Sign In"}
             </button>
+
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">Or continue with</span>
+              </div>
+            </div>
+
+            <div className="flex justify-center">
+              <GoogleLogin
+                onSuccess={(credentialResponse) => {
+                  loginWithGoogle(credentialResponse.credential).catch(() => {});
+                }}
+                onError={() => {
+                  toast.error("Google Login Failed");
+                }}
+                useOneTap
+              />
+            </div>
           </form>
 
           <div className="mt-5 pt-5 border-t border-gray-100 space-y-3 text-center">
-            <p className="text-xs text-gray-400">
-              Demo: <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">admin@fleet.com</span>{" "}/ <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">admin123</span>
-            </p>
             <p className="text-sm text-gray-600">
               No account?{" "}
               <Link to="/signup" className="text-blue-600 hover:text-blue-700 font-semibold transition-colors">Create one</Link>
