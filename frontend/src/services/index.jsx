@@ -126,3 +126,35 @@ export const getCostPerKmReport = async (params = {}) => {
   const response = await api.get('/reports/cost-per-km', { params })
   return response.data
 }
+
+
+// Fuel Intelligence Services
+export const getFuelIntelligenceSummary = async () => {
+  const response = await api.get('/fuels/intelligence/summary')
+  return response.data
+}
+
+export const getFuelIntelligenceMetrics = async () => {
+  const response = await api.get('/fuels/intelligence/metrics')
+  return response.data
+}
+
+export const predictFuelEfficiency = async (data) => {
+  const response = await api.post('/fuels/intelligence/predict', data)
+  return response.data
+}
+
+export const getPredictionHistory = async () => {
+  const response = await api.get('/fuels/intelligence/predictions')
+  return response.data
+}
+
+export const seedDemoFuelLogs = async () => {
+  const response = await api.post('/fuels/seed-demo')
+  return response.data
+}
+
+export const clearDemoFuelLogs = async () => {
+  const response = await api.post('/fuels/clear-demo')
+  return response.data
+}
