@@ -1,0 +1,97 @@
+{
+  "project": "FleetFly Fuel Intelligence",
+  "timestamp": "2026-10-29T19:57:45.606817",
+  "dataset": {
+    "name": "UCI Auto MPG Benchmark Dataset",
+    "source": "https://archive.ics.uci.edu/ml/machine-learning-databases/auto-mpg/",
+    "total_records": 398,
+    "train_records": 318,
+    "test_records": 80,
+    "test_split_ratio": 0.2,
+    "random_seed": 42,
+    "features": [
+      "cylinders",
+      "displacement",
+      "horsepower",
+      "weight",
+      "acceleration",
+      "model_year"
+    ],
+    "median_mpg_threshold": 23.0,
+    "scaler_params": {
+      "mean": [
+        5.484277,
+        194.617925,
+        104.690252,
+        2966.015723,
+        15.481761,
+        75.808176
+      ],
+      "scale": [
+        1.709593,
+        106.166059,
+        38.656353,
+        855.313909,
+        2.833301,
+        3.66322
+      ]
+    }
+  },
+  "regression": {
+    "model_name": "Linear Regression",
+    "algorithm": "LinearRegression (Ordinary Least Squares)",
+    "target_variable": "mpg (Miles Per Gallon continuous)",
+    "test_samples": 80,
+    "train_samples": 318,
+    "r2_score": 0.7861,
+    "mae": 2.6732,
+    "rmse": 3.5554,
+    "intercept": 23.4811,
+    "coefficients": {
+      "cylinders": -0.9777,
+      "displacement": 1.5617,
+      "horsepower": -0.2463,
+      "weight": -5.9299,
+      "acceleration": 0.1456,
+      "model_year": 2.9213
+    }
+  },
+  "classification": {
+    "model_name": "Decision Tree Classifier",
+    "algorithm": "DecisionTreeClassifier (max_depth=4, criterion='gini')",
+    "target_variable": "high_efficiency (1: High Efficiency >= median, 0: Standard)",
+    "positive_class": "1 (High Efficiency)",
+    "test_samples": 80,
+    "train_samples": 318,
+    "accuracy": 0.8875,
+    "precision": 0.8974,
+    "recall": 0.875,
+    "f1_score": 0.8861,
+    "confusion_matrix": [
+      [
+        36,
+        4
+      ],
+      [
+        5,
+        35
+      ]
+    ],
+    "feature_importances": {
+      "cylinders": 0.0,
+      "displacement": 0.7597,
+      "horsepower": 0.0106,
+      "weight": 0.0942,
+      "acceleration": 0.0241,
+      "model_year": 0.1114
+    }
+  },
+  "summary": {
+    "r2_score": 0.7861,
+    "mae": 2.6732,
+    "accuracy": 0.8875,
+    "precision": 0.8974,
+    "recall": 0.875,
+    "f1_score": 0.8861
+  }
+}

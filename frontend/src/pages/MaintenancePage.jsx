@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, AlertCircle, Wrench, MapPin } from "lucide-react";
+import { Plus, AlertCircle, Wrench, MapPin, Fuel } from "lucide-react";
+import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import useMaintenanceScheduler from "@/hooks/useMaintenanceScheduler";
 import { MaintenanceStats }     from "@/components/maintenance/MaintenanceStats";
@@ -131,6 +132,17 @@ export default function MaintenancePage() {
 
       {/* Stats */}
       {data.stats && <MaintenanceStats stats={data.stats} />}
+
+      {/* Fuel Intelligence Link */}
+      <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-2.5 text-xs text-emerald-900">
+        <div className="flex items-center gap-2">
+          <Fuel className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>Looking for vehicle fuel consumption patterns or efficiency predictions?</span>
+        </div>
+        <Link to="/dashboard/fuels" className="font-semibold text-emerald-700 hover:text-emerald-800 hover:underline inline-flex items-center gap-1 shrink-0 ml-2">
+          Fuel Intelligence &rarr;
+        </Link>
+      </div>
 
       {/* Error */}
       {globalError && (
